@@ -1,15 +1,13 @@
 # NexusProgrammer
 
-NexusProgrammer is a Windows WPF utility for CH341/CH347-based IC programmers and XGecu T48.
-It can detect a programmer, search/select SPI NOR flash chips, read/write/verify
-buffers, erase chips, and run simple scripts such as `Read + Verify` and
-`Erase + Write + Verify`.
+NexusProgrammer is a Windows utility app for CH34x and XGecu T48.
+It focuses on SPI NOR flash chips. It can detect a programmer, search/select SPI NOR chips, read/write/verify buffers and erase chips
 
 ## Features
 
 - CH341, CH347, and XGecu T48 programmer detection.
 - SPI NOR catalog search with JEDEC ID matching.
-- Integrated IC catalog with supported SPI 25xx, I2C 24xx, and flashrom-derived SPI NOR entries.
+- Separate SPI NOR catalogs for CH34x and XGecu T48.
 - Hex buffer preview/editor.
 - Read, write, verify, erase, and script workflows.
 - Light/dark mode.
@@ -45,6 +43,6 @@ installed system-wide.
 
 Application source code is licensed under the MIT License. See `LICENSE`.
 
-Parts of the integrated IC catalog are generated from flashrom chip definitions and remain
+Parts of the CH34x SPI NOR catalog are generated from flashrom chip definitions and remain
 subject to the flashrom GPL-2.0-or-later license. See `THIRD_PARTY_NOTICES.md`
 and `flashrom-data/COPYING.rst`.

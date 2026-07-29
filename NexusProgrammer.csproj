@@ -1,14 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <AssemblyName>NexusProgrammer</AssemblyName>
     <Product>NexusProgrammer</Product>
-    <Authors>mhqb365</Authors>
+    <Authors>mhqb365.com</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/mhqb365/NexusProgrammer</RepositoryUrl>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
@@ -18,8 +18,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="IntegratedICCatalog.tsv" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="T48ICCatalog.tsv" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Catalog\CH34x_SPI_NOR.tsv" Link="IntegratedICCatalog.tsv"
+      CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Catalog\XGecuT48_SPI_NOR.tsv" Link="T48ICCatalog.tsv"
+      CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

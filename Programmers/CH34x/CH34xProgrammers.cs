@@ -1,0 +1,823 @@
+using System.IO;
+using System.Runtime.InteropServices;
+
+namespace NexusProgrammer;
+
+public sealed class Ch347NativeProgrammer : IChipProgrammer
+{
+    private const int DeviceIndex = 0;
+    private const uint ChipSelect = 0x80;
+    private const int ReadChunkSize = 32768;
+    private const int I2cReadChunkSize = 512;
+    private const int PageProgramDelayMs = 1;
+
+    public string Name => "CH347 native DLL";
+
+    public static bool IsAvailable =>
+        File.Exists(Path.Combine(Environment.SystemDirectory, "CH347DLLA64.DLL")) ||
+        File.Exists(Path.Combine(AppContext.BaseDirectory, "CH347DLLA64.DLL"));
+
+    public static bool CanOpenDevice()
+    {
+        var handle = NativeMethods.CH347OpenDevice(DeviceIndex);
+        if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+        {
+            return false;
+        }
+
+        NativeMethods.CH347CloseDevice(DeviceIndex);
+        return true;
+    }
+
+    public async Task<bool> DetectAsync(IProgress<int> progress)
+    {
+        progress.Report(10);
+        await Task.Yield();
+        var handle = NativeMethods.CH347OpenDevice(DeviceIndex);
+        if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+        {
+            progress.Report(100);
+            return false;
+        }
+
+        NativeMethods.CH347CloseDevice(DeviceIndex);
+        progress.Report(100);
+        return true;
+    }
+
+    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(() =>
+    {
+        if (IsI2c(chip))
+        {
+            progress.Report(100);
+            return Array.Empty<byte>();
+        }
+
+        EnsureSpi(chip);
+        using var device = OpenDevice();
+        progress.Report(25);
+        var id = SpiTransfer([0x9F, 0x00, 0x00, 0x00]);
+        progress.Report(100);
+        return id.Skip(1).Take(3).ToArray();
+    });
+
+    public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress) => Task.Run(() =>
+    {
+        if (IsI2c(chip))
+        {
+            using var device = OpenDevice();
+            return ReadI2cEeprom(chip, startAddress, length, progress);
+        }
+
+        EnsureSpi(chip);
+        using var spiDevice = OpenDevice();
+        var result = new byte[length];
+        var done = 0;
+
+        while (done < length)
+        {
+            var count = Math.Min(ReadChunkSize, length - done);
+            var address = startAddress + done;
+            var addressBytes = Uses4ByteAddress(chip, address) ? 4 : 3;
+            var command = new byte[count + 1 + addressBytes];
+            WriteAddress(command, 0, 0x03, 0x13, address, addressBytes);
+            var response = SpiTransfer(command);
+            Buffer.BlockCopy(response, command.Length - count, result, done, count);
+            done += count;
+            progress.Report(length == 0 ? 100 : done * 100 / length);
+        }
+
+        progress.Report(100);
+        return result;
+    });
+
+    public Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false) => Task.Run(async () =>
+    {
+        if (IsI2c(chip))
+        {
+            using var device = OpenDevice();
+            await WriteI2cEepromAsync(chip, startAddress, data, progress, skipBlankPages);
+            return;
+        }
+
+        EnsureSpi(chip);
+        using var spiDevice = OpenDevice();
+        var done = 0;
+
+        while (done < data.Length)
+        {
+            var pageOffset = (startAddress + done) % chip.PageSize;
+            var count = Math.Min(chip.PageSize - pageOffset, data.Length - done);
+            if (skipBlankPages && IsBlank(data, done, count))
+            {
+                done += count;
+                progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+                continue;
+            }
+
+            WriteEnable();
+
+            var address = startAddress + done;
+            var addressBytes = Uses4ByteAddress(chip, address) ? 4 : 3;
+            var headerLength = 1 + addressBytes;
+            var command = new byte[count + headerLength];
+            WriteAddress(command, 0, 0x02, 0x12, address, addressBytes);
+            Buffer.BlockCopy(data, done, command, headerLength, count);
+            SpiTransfer(command);
+            await WaitUntilReadyAsync();
+
+            done += count;
+            progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+        }
+
+        progress.Report(100);
+    });
+
+    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress)
+    {
+        var actual = await ReadAsync(chip, startAddress, data.Length, progress);
+        return actual.SequenceEqual(data);
+    }
+
+    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(async () =>
+    {
+        if (IsI2c(chip))
+        {
+            throw new NotSupportedException("I2C EEPROM does not use SPI NOR block-protect status bits.");
+        }
+
+        EnsureSpi(chip);
+        using var spiDevice = OpenDevice();
+        await ClearSpiNorProtectionAsync(progress);
+    });
+
+    public Task EraseAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(async () =>
+    {
+        if (IsI2c(chip))
+        {
+            using var device = OpenDevice();
+            var blank = Enumerable.Repeat((byte)0xFF, chip.SizeBytes).ToArray();
+            await WriteI2cEepromAsync(chip, 0, blank, progress, skipBlankPages: false);
+            return;
+        }
+
+        EnsureSpi(chip);
+        using var spiDevice = OpenDevice();
+        WriteEnable();
+        SpiTransfer([0xC7]);
+        progress.Report(5);
+
+        for (var i = 0; i < 600; i++)
+        {
+            if (!IsBusy())
+            {
+                progress.Report(100);
+                return;
+            }
+
+            progress.Report(Math.Min(95, 5 + i / 7));
+            await Task.Delay(100);
+        }
+
+        throw new TimeoutException("Erase timeout. Chip still reports WIP=1.");
+    });
+
+    private static Ch347Device OpenDevice()
+    {
+        var handle = NativeMethods.CH347OpenDevice(DeviceIndex);
+        if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+        {
+            throw new InvalidOperationException("Cannot open CH347. Check USB connection, WCH CH347 driver, and that no other programmer software is using it.");
+        }
+
+        return new Ch347Device();
+    }
+
+    private static byte[] SpiTransfer(byte[] buffer)
+    {
+        var io = buffer.ToArray();
+        if (!NativeMethods.CH347StreamSPI4(DeviceIndex, ChipSelect, (uint)io.Length, io))
+        {
+            if (!NativeMethods.CH347StreamSPI4(DeviceIndex, 0, (uint)io.Length, io))
+            {
+                throw new IOException("CH347 SPI transfer failed.");
+            }
+        }
+
+        return io;
+    }
+
+    private static byte[] ReadI2cEeprom(ChipProfile chip, int startAddress, int length, IProgress<int> progress)
+    {
+        var result = new byte[length];
+        var done = 0;
+        while (done < length)
+        {
+            var count = Math.Min(I2cReadChunkSize, length - done);
+            var address = startAddress + done;
+            var write = BuildI2cAddressWriteBuffer(chip, address);
+            var read = new byte[count];
+
+            if (!NativeMethods.CH347StreamI2C(DeviceIndex, (uint)write.Length, write, (uint)read.Length, read))
+            {
+                throw new IOException($"CH347 I2C read failed at 0x{address:X6}.");
+            }
+
+            Buffer.BlockCopy(read, 0, result, done, count);
+            done += count;
+            progress.Report(length == 0 ? 100 : done * 100 / length);
+        }
+
+        progress.Report(100);
+        return result;
+    }
+
+    private static async Task WriteI2cEepromAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages)
+    {
+        var done = 0;
+        while (done < data.Length)
+        {
+            var address = startAddress + done;
+            var pageOffset = address % chip.PageSize;
+            var count = Math.Min(chip.PageSize - pageOffset, data.Length - done);
+            if (skipBlankPages && IsBlank(data, done, count))
+            {
+                done += count;
+                progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+                continue;
+            }
+
+            var write = BuildI2cPageWriteBuffer(chip, address, data, done, count);
+
+            if (!NativeMethods.CH347StreamI2C(DeviceIndex, (uint)write.Length, write, 0, Array.Empty<byte>()))
+            {
+                throw new IOException($"CH347 I2C write failed at 0x{address:X6}.");
+            }
+
+            done += count;
+            progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+            await Task.Delay(6);
+        }
+
+        progress.Report(100);
+    }
+
+    private static byte[] BuildI2cAddressWriteBuffer(ChipProfile chip, int address)
+    {
+        var device = I2cDeviceWriteAddress(chip, address);
+        if (UsesOneByteI2cAddress(chip))
+        {
+            return [(byte)device, (byte)(address & 0xFF)];
+        }
+
+        return [(byte)device, (byte)((address >> 8) & 0xFF), (byte)(address & 0xFF)];
+    }
+
+    private static byte[] BuildI2cPageWriteBuffer(ChipProfile chip, int address, byte[] data, int dataOffset, int count)
+    {
+        var prefix = BuildI2cAddressWriteBuffer(chip, address);
+        var write = new byte[prefix.Length + count];
+        Buffer.BlockCopy(prefix, 0, write, 0, prefix.Length);
+        Buffer.BlockCopy(data, dataOffset, write, prefix.Length, count);
+        return write;
+    }
+
+    private static int I2cDeviceWriteAddress(ChipProfile chip, int address)
+    {
+        var block = UsesOneByteI2cAddress(chip) ? (address >> 8) & 0x07 : 0;
+        return 0xA0 | (block << 1);
+    }
+
+    private static bool UsesOneByteI2cAddress(ChipProfile chip) => chip.SizeBytes <= 2048;
+
+    private static bool IsBlank(byte[] data, int offset, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            if (data[offset + i] != 0xFF)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void WriteEnable() => SpiTransfer([0x06]);
+
+    private static bool IsBusy()
+    {
+        var status = SpiTransfer([0x05, 0x00]);
+        return (status[1] & 0x01) != 0;
+    }
+
+    private static byte ReadStatus(byte command) => SpiTransfer([command, 0x00])[1];
+
+    private static async Task ClearSpiNorProtectionAsync(IProgress<int> progress)
+    {
+        var sr1 = ReadStatus(0x05);
+        var sr2 = ReadStatus(0x35);
+        progress.Report(20);
+
+        var nextSr1 = (byte)(sr1 & 0x03);
+        var nextSr2 = (byte)(sr2 & 0x02);
+        if (nextSr1 == sr1 && nextSr2 == sr2)
+        {
+            progress.Report(100);
+            return;
+        }
+
+        WriteEnable();
+        SpiTransfer([0x01, nextSr1, nextSr2]);
+        await WaitUntilReadyAsync();
+        progress.Report(100);
+    }
+
+    private static async Task WaitUntilReadyAsync()
+    {
+        for (var i = 0; i < 500; i++)
+        {
+            if (!IsBusy())
+            {
+                return;
+            }
+
+            await Task.Delay(PageProgramDelayMs);
+        }
+
+        throw new TimeoutException("Write timeout. Chip still reports WIP=1.");
+    }
+
+    private static void WriteAddress(byte[] buffer, int offset, byte command3Byte, byte command4Byte, int address, int addressBytes)
+    {
+        buffer[offset] = addressBytes == 4 ? command4Byte : command3Byte;
+        if (addressBytes == 4)
+        {
+            buffer[offset + 1] = (byte)((address >> 24) & 0xFF);
+            buffer[offset + 2] = (byte)((address >> 16) & 0xFF);
+            buffer[offset + 3] = (byte)((address >> 8) & 0xFF);
+            buffer[offset + 4] = (byte)(address & 0xFF);
+            return;
+        }
+
+        buffer[offset + 1] = (byte)((address >> 16) & 0xFF);
+        buffer[offset + 2] = (byte)((address >> 8) & 0xFF);
+        buffer[offset + 3] = (byte)(address & 0xFF);
+    }
+
+    private static bool Uses4ByteAddress(ChipProfile chip, int address) =>
+        chip.SizeBytes > 0x1000000 || address > 0xFFFFFF;
+
+    private static bool IsI2c(ChipProfile chip) => string.Equals(chip.Protocol, "I2C", StringComparison.OrdinalIgnoreCase);
+
+    private static void EnsureSpi(ChipProfile chip)
+    {
+        if (!string.Equals(chip.Protocol, "SPI", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException("This protocol is catalog-only in the CH347 backend. Real read/write is enabled for SPI 25xx and I2C 24xx.");
+        }
+    }
+
+    private sealed class Ch347Device : IDisposable
+    {
+        public void Dispose() => NativeMethods.CH347CloseDevice(DeviceIndex);
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347OpenDevice", CallingConvention = CallingConvention.Winapi)]
+        public static extern IntPtr CH347OpenDevice(int index);
+
+        [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347CloseDevice", CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CH347CloseDevice(int index);
+
+        [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347StreamSPI4", CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CH347StreamSPI4(int index, uint chipSelect, uint length, byte[] buffer);
+
+        [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347StreamI2C", CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CH347StreamI2C(int index, uint writeLength, byte[] writeBuffer, uint readLength, byte[] readBuffer);
+    }
+}
+
+public sealed class ChNativeProgrammer : IChipProgrammer
+{
+    private const int DeviceIndex = 0;
+    private const string ChNativeDll = "CH" + "341DLLA64.DLL";
+    private const uint StreamMode = 0x81;
+    private const uint ChipSelect = 0x80;
+    private const int ReadChunkSize = 3840;
+    private const int I2cReadChunkSize = 256;
+    private const int PageProgramDelayMs = 1;
+
+    public string Name => "CH341 native DLL";
+
+    public static bool IsAvailable =>
+        File.Exists(Path.Combine(Environment.SystemDirectory, ChNativeDll)) ||
+        File.Exists(Path.Combine(AppContext.BaseDirectory, ChNativeDll));
+
+    public static bool CanOpenDevice()
+    {
+        var handle = NativeMethods.CHOpenDevice(DeviceIndex);
+        if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+        {
+            return false;
+        }
+
+        NativeMethods.CHCloseDevice(DeviceIndex);
+        return true;
+    }
+
+    public async Task<bool> DetectAsync(IProgress<int> progress)
+    {
+        progress.Report(10);
+        await Task.Yield();
+        var handle = NativeMethods.CHOpenDevice(DeviceIndex);
+        if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+        {
+            progress.Report(100);
+            return false;
+        }
+
+        try
+        {
+            var ok = NativeMethods.CHSetStream(DeviceIndex, StreamMode);
+            progress.Report(100);
+            return ok;
+        }
+        finally
+        {
+            NativeMethods.CHCloseDevice(DeviceIndex);
+        }
+    }
+
+    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(() =>
+    {
+        if (IsI2c(chip))
+        {
+            progress.Report(100);
+            return Array.Empty<byte>();
+        }
+
+        EnsureSpi(chip);
+        using var device = OpenDevice();
+        progress.Report(25);
+        var id = SpiTransfer([0x9F, 0x00, 0x00, 0x00]);
+        progress.Report(100);
+        return id.Skip(1).Take(3).ToArray();
+    });
+
+    public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress) => Task.Run(() =>
+    {
+        if (IsI2c(chip))
+        {
+            using var i2cDevice = OpenDevice();
+            return ReadI2cEeprom(chip, startAddress, length, progress);
+        }
+
+        EnsureSpi(chip);
+        using var spiDevice = OpenDevice();
+        var result = new byte[length];
+        var done = 0;
+
+        while (done < length)
+        {
+            var count = Math.Min(ReadChunkSize, length - done);
+            var address = startAddress + done;
+            var addressBytes = Uses4ByteAddress(chip, address) ? 4 : 3;
+            var command = new byte[count + 1 + addressBytes];
+            WriteAddress(command, 0, 0x03, 0x13, address, addressBytes);
+            var response = SpiTransfer(command);
+            Buffer.BlockCopy(response, command.Length - count, result, done, count);
+            done += count;
+            progress.Report(length == 0 ? 100 : done * 100 / length);
+        }
+
+        progress.Report(100);
+        return result;
+    });
+
+    public Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false) => Task.Run(async () =>
+    {
+        if (IsI2c(chip))
+        {
+            using var i2cDevice = OpenDevice();
+            await WriteI2cEepromAsync(chip, startAddress, data, progress, skipBlankPages);
+            return;
+        }
+
+        EnsureSpi(chip);
+        using var spiDevice = OpenDevice();
+        var done = 0;
+
+        while (done < data.Length)
+        {
+            var pageOffset = (startAddress + done) % chip.PageSize;
+            var count = Math.Min(chip.PageSize - pageOffset, data.Length - done);
+            if (skipBlankPages && IsBlank(data, done, count))
+            {
+                done += count;
+                progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+                continue;
+            }
+
+            WriteEnable();
+
+            var address = startAddress + done;
+            var addressBytes = Uses4ByteAddress(chip, address) ? 4 : 3;
+            var headerLength = 1 + addressBytes;
+            var command = new byte[count + headerLength];
+            WriteAddress(command, 0, 0x02, 0x12, address, addressBytes);
+            Buffer.BlockCopy(data, done, command, headerLength, count);
+            SpiTransfer(command);
+            await WaitUntilReadyAsync();
+
+            done += count;
+            progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+        }
+
+        progress.Report(100);
+    });
+
+    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress)
+    {
+        var actual = await ReadAsync(chip, startAddress, data.Length, progress);
+        return actual.SequenceEqual(data);
+    }
+
+    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(async () =>
+    {
+        if (IsI2c(chip))
+        {
+            throw new NotSupportedException("I2C EEPROM does not use SPI NOR block-protect status bits.");
+        }
+
+        EnsureSpi(chip);
+        using var spiDevice = OpenDevice();
+        await ClearSpiNorProtectionAsync(progress);
+    });
+
+    public Task EraseAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(async () =>
+    {
+        if (IsI2c(chip))
+        {
+            using var i2cDevice = OpenDevice();
+            var blank = Enumerable.Repeat((byte)0xFF, chip.SizeBytes).ToArray();
+            await WriteI2cEepromAsync(chip, 0, blank, progress, skipBlankPages: false);
+            return;
+        }
+
+        EnsureSpi(chip);
+        using var spiDevice = OpenDevice();
+        WriteEnable();
+        SpiTransfer([0xC7]);
+        progress.Report(5);
+
+        for (var i = 0; i < 600; i++)
+        {
+            if (!IsBusy())
+            {
+                progress.Report(100);
+                return;
+            }
+
+            progress.Report(Math.Min(95, 5 + i / 7));
+            await Task.Delay(100);
+        }
+
+        throw new TimeoutException("Erase timeout. Chip still reports WIP=1.");
+    });
+
+    private static ChDevice OpenDevice()
+    {
+        var handle = NativeMethods.CHOpenDevice(DeviceIndex);
+        if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+        {
+            throw new InvalidOperationException("Cannot open CH. Check USB connection, WCH driver, and that no other programmer software is using it.");
+        }
+
+        if (!NativeMethods.CHSetStream(DeviceIndex, StreamMode))
+        {
+            NativeMethods.CHCloseDevice(DeviceIndex);
+            throw new InvalidOperationException("Cannot configure CH SPI stream mode.");
+        }
+
+        return new ChDevice();
+    }
+
+    private static byte[] SpiTransfer(byte[] buffer)
+    {
+        var io = buffer.ToArray();
+        if (!NativeMethods.CHStreamSPI4(DeviceIndex, ChipSelect, (uint)io.Length, io))
+        {
+            if (!NativeMethods.CHStreamSPI4(DeviceIndex, 0, (uint)io.Length, io))
+            {
+                throw new IOException("CH SPI transfer failed.");
+            }
+        }
+
+        return io;
+    }
+
+    private static byte[] ReadI2cEeprom(ChipProfile chip, int startAddress, int length, IProgress<int> progress)
+    {
+        var result = new byte[length];
+        var done = 0;
+        while (done < length)
+        {
+            var count = Math.Min(I2cReadChunkSize, length - done);
+            var address = startAddress + done;
+            var write = BuildI2cAddressWriteBuffer(chip, address);
+            var read = new byte[count];
+
+            if (!NativeMethods.CHStreamI2C(DeviceIndex, (uint)write.Length, write, (uint)read.Length, read))
+            {
+                throw new IOException($"CH I2C read failed at 0x{address:X6}.");
+            }
+
+            Buffer.BlockCopy(read, 0, result, done, count);
+            done += count;
+            progress.Report(length == 0 ? 100 : done * 100 / length);
+        }
+
+        progress.Report(100);
+        return result;
+    }
+
+    private static async Task WriteI2cEepromAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages)
+    {
+        var done = 0;
+        while (done < data.Length)
+        {
+            var address = startAddress + done;
+            var pageOffset = address % chip.PageSize;
+            var count = Math.Min(chip.PageSize - pageOffset, data.Length - done);
+            if (skipBlankPages && IsBlank(data, done, count))
+            {
+                done += count;
+                progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+                continue;
+            }
+
+            var write = BuildI2cPageWriteBuffer(chip, address, data, done, count);
+
+            if (!NativeMethods.CHStreamI2C(DeviceIndex, (uint)write.Length, write, 0, Array.Empty<byte>()))
+            {
+                throw new IOException($"CH I2C write failed at 0x{address:X6}.");
+            }
+
+            done += count;
+            progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+            await Task.Delay(8);
+        }
+
+        progress.Report(100);
+    }
+
+    private static byte[] BuildI2cAddressWriteBuffer(ChipProfile chip, int address)
+    {
+        var device = I2cDeviceWriteAddress(chip, address);
+        if (UsesOneByteI2cAddress(chip))
+        {
+            return [(byte)device, (byte)(address & 0xFF)];
+        }
+
+        return [(byte)device, (byte)((address >> 8) & 0xFF), (byte)(address & 0xFF)];
+    }
+
+    private static byte[] BuildI2cPageWriteBuffer(ChipProfile chip, int address, byte[] data, int dataOffset, int count)
+    {
+        var prefix = BuildI2cAddressWriteBuffer(chip, address);
+        var write = new byte[prefix.Length + count];
+        Buffer.BlockCopy(prefix, 0, write, 0, prefix.Length);
+        Buffer.BlockCopy(data, dataOffset, write, prefix.Length, count);
+        return write;
+    }
+
+    private static int I2cDeviceWriteAddress(ChipProfile chip, int address)
+    {
+        var block = UsesOneByteI2cAddress(chip) ? (address >> 8) & 0x07 : 0;
+        return 0xA0 | (block << 1);
+    }
+
+    private static bool UsesOneByteI2cAddress(ChipProfile chip) => chip.SizeBytes <= 2048;
+
+    private static bool IsBlank(byte[] data, int offset, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            if (data[offset + i] != 0xFF)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void WriteEnable() => SpiTransfer([0x06]);
+
+    private static bool IsBusy()
+    {
+        var status = SpiTransfer([0x05, 0x00]);
+        return (status[1] & 0x01) != 0;
+    }
+
+    private static byte ReadStatus(byte command) => SpiTransfer([command, 0x00])[1];
+
+    private static async Task ClearSpiNorProtectionAsync(IProgress<int> progress)
+    {
+        var sr1 = ReadStatus(0x05);
+        var sr2 = ReadStatus(0x35);
+        progress.Report(20);
+
+        var nextSr1 = (byte)(sr1 & 0x03);
+        var nextSr2 = (byte)(sr2 & 0x02);
+        if (nextSr1 == sr1 && nextSr2 == sr2)
+        {
+            progress.Report(100);
+            return;
+        }
+
+        WriteEnable();
+        SpiTransfer([0x01, nextSr1, nextSr2]);
+        await WaitUntilReadyAsync();
+        progress.Report(100);
+    }
+
+    private static async Task WaitUntilReadyAsync()
+    {
+        for (var i = 0; i < 500; i++)
+        {
+            if (!IsBusy())
+            {
+                return;
+            }
+
+            await Task.Delay(PageProgramDelayMs);
+        }
+
+        throw new TimeoutException("Write timeout. Chip still reports WIP=1.");
+    }
+
+    private static void WriteAddress(byte[] buffer, int offset, byte command3Byte, byte command4Byte, int address, int addressBytes)
+    {
+        buffer[offset] = addressBytes == 4 ? command4Byte : command3Byte;
+        if (addressBytes == 4)
+        {
+            buffer[offset + 1] = (byte)((address >> 24) & 0xFF);
+            buffer[offset + 2] = (byte)((address >> 16) & 0xFF);
+            buffer[offset + 3] = (byte)((address >> 8) & 0xFF);
+            buffer[offset + 4] = (byte)(address & 0xFF);
+            return;
+        }
+
+        buffer[offset + 1] = (byte)((address >> 16) & 0xFF);
+        buffer[offset + 2] = (byte)((address >> 8) & 0xFF);
+        buffer[offset + 3] = (byte)(address & 0xFF);
+    }
+
+    private static bool Uses4ByteAddress(ChipProfile chip, int address) =>
+        chip.SizeBytes > 0x1000000 || address > 0xFFFFFF;
+
+    private static bool IsI2c(ChipProfile chip) => string.Equals(chip.Protocol, "I2C", StringComparison.OrdinalIgnoreCase);
+
+    private static void EnsureSpi(ChipProfile chip)
+    {
+        if (!string.Equals(chip.Protocol, "SPI", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException("This protocol is catalog-only in the CH backend. Real read/write is enabled for SPI 25xx and I2C 24xx.");
+        }
+    }
+
+    private sealed class ChDevice : IDisposable
+    {
+        public void Dispose() => NativeMethods.CHCloseDevice(DeviceIndex);
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport(ChNativeDll, EntryPoint = "CH" + "341OpenDevice", CallingConvention = CallingConvention.Winapi)]
+        public static extern IntPtr CHOpenDevice(int index);
+
+        [DllImport(ChNativeDll, EntryPoint = "CH" + "341CloseDevice", CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CHCloseDevice(int index);
+
+        [DllImport(ChNativeDll, EntryPoint = "CH" + "341SetStream", CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CHSetStream(int index, uint mode);
+
+        [DllImport(ChNativeDll, EntryPoint = "CH" + "341StreamSPI4", CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CHStreamSPI4(int index, uint chipSelect, uint length, byte[] buffer);
+
+        [DllImport(ChNativeDll, EntryPoint = "CH" + "341StreamI2C", CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CHStreamI2C(int index, uint writeLength, byte[] writeBuffer, uint readLength, byte[] readBuffer);
+    }
+}
+
+

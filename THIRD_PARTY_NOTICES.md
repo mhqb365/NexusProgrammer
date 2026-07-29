@@ -24,3 +24,9 @@ Rows imported from Raoufbaa's EEFlasher project.
 Source: <https://github.com/Raoufbaa/EEflasher-Release>
 
 EEFlasher is licensed under the MIT License.
+
+## XGecu T48 IC catalog
+
+Rows imported from Kreeblah's XGecu Software project.
+
+Source: <https://github.com/Kreeblah/XGecu_Software/blob/master/SupportLists/T48_List.txt>
