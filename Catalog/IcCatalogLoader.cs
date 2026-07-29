@@ -7,22 +7,53 @@ public static class IcCatalogLoader
     private static readonly CatalogSource[] CatalogFiles =
     [
         new("IntegratedICCatalog.tsv", Path.Combine("Catalog", "CH34x_SPI_NOR.tsv")),
-        new("T48ICCatalog.tsv", Path.Combine("Catalog", "XGecuT48_SPI_NOR.tsv"))
+        new("T48ICCatalog.tsv", Path.Combine("Catalog", "XGecuT48_SPI_NOR.tsv")),
+        new("User_SPI_NOR.tsv", Path.Combine("Catalog", "User_SPI_NOR.tsv"))
     ];
 
     public static List<IcCandidate> LoadSpiCatalog()
     {
         var list = new List<IcCandidate>();
-        var knownDevices = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var knownIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var source in CatalogFiles)
         {
-            AddTsvCatalog(list, knownDevices, source);
+            AddTsvCatalog(list, knownIds, source);
         }
 
         return list;
     }
 
-    private static void AddTsvCatalog(List<IcCandidate> list, HashSet<string> knownDevices, CatalogSource source)
+    public static void SaveUserCandidate(IcCandidate candidate)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Catalog", "User_SPI_NOR.tsv");
+        if (!Directory.Exists(Path.GetDirectoryName(path)))
+        {
+            path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Catalog", "User_SPI_NOR.tsv");
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var writeHeader = !File.Exists(path) || new FileInfo(path).Length == 0;
+        using var writer = new StreamWriter(path, append: true);
+        if (writeHeader)
+        {
+            writer.WriteLine("# User-added SPI NOR catalog");
+            writer.WriteLine("Device\tManufacturer\tRawId\tSizeBytes\tPageSize\tVolts\tProtocol\tCommandSet\tType\tSupported");
+        }
+
+        writer.WriteLine(string.Join('\t',
+            candidate.Device,
+            candidate.Manuf,
+            candidate.JedecId.Replace(" ", string.Empty, StringComparison.Ordinal),
+            candidate.Profile.SizeBytes,
+            candidate.Profile.PageSize,
+            candidate.Volts.TrimEnd('V'),
+            candidate.Profile.Protocol,
+            candidate.Profile.CommandSet,
+            candidate.Type,
+            "true"));
+    }
+
+    private static void AddTsvCatalog(List<IcCandidate> list, Dictionary<string, string> knownIds, CatalogSource source)
     {
         var catalogPath = FindCatalogFile(source);
         if (catalogPath is null)
@@ -43,14 +74,20 @@ public static class IcCatalogLoader
                 !int.TryParse(fields[4], out var pageSize) ||
                 sizeBytes <= 0 ||
                 pageSize <= 0 ||
-                !string.Equals(fields[6], "SPI", StringComparison.OrdinalIgnoreCase) ||
-                !knownDevices.Add(fields[0]))
+                !string.Equals(fields[6], "SPI", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
+            var device = fields[0];
+            var rawId = FormatRawId(fields[2]);
+            if (string.IsNullOrWhiteSpace(rawId) && knownIds.TryGetValue(DeviceKey(device), out var knownId))
+            {
+                rawId = knownId;
+            }
+
             var profile = new ChipProfile(
-                fields[0],
+                device,
                 fields[6],
                 sizeBytes,
                 pageSize,
@@ -60,14 +97,19 @@ public static class IcCatalogLoader
                 fields[8]);
 
             list.Add(new IcCandidate(
-                fields[0],
+                device,
                 FormatVolts(fields[5]),
                 FormatMbits(sizeBytes),
                 $"{pageSize} Bytes",
                 profile.Manufacturer,
                 fields[8],
                 profile,
-                FormatRawId(fields[2])));
+                rawId));
+
+            if (!string.IsNullOrWhiteSpace(rawId))
+            {
+                knownIds.TryAdd(DeviceKey(device), rawId);
+            }
         }
     }
 
@@ -96,6 +138,24 @@ public static class IcCatalogLoader
 
     private static string FormatVolts(string? volts) =>
         string.IsNullOrWhiteSpace(volts) ? string.Empty : volts.EndsWith('V') ? volts : $"{volts}V";
+
+    private static string DeviceKey(string device)
+    {
+        var name = device.Trim();
+        var slash = name.IndexOf('/');
+        if (slash >= 0)
+        {
+            name = name[..slash];
+        }
+
+        var paren = name.IndexOf('(');
+        if (paren >= 0)
+        {
+            name = name[..paren];
+        }
+
+        return new string(name.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+    }
 
     public static string FormatMbits(int bytes)
     {

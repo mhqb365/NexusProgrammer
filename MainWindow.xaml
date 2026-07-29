@@ -287,6 +287,7 @@
             </MenuItem>
             <MenuItem x:Name="IcMenu" Header="_IC">
                 <MenuItem x:Name="SearchIcMenuItem" Header="Search" Click="SearchIc_Click" />
+                <MenuItem x:Name="AddIcMenuItem" Header="Add IC" Click="AddIc_Click" />
                 <MenuItem x:Name="ReadIdMenuItem" Header="Detect" Click="ReadId_Click" />
                 <Separator />
                 <MenuItem x:Name="ReadChipMenuItem" Header="Read" Click="ReadChip_Click" />
@@ -591,16 +592,20 @@
                             <Button x:Name="HexSearchNextButton" DockPanel.Dock="Right" Width="24"
                                 Height="20" Margin="2,4,2,4" Padding="0" ToolTip="Find next"
                                 Click="HexSearchNext_Click">
-                                <Path Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource TextBrush}"
-                                    StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                    StrokeLineJoin="Round" Data="M9,6 L15,12 L9,18"/>
+                                <Path Width="12" Height="12" Stretch="Uniform"
+                                    Stroke="{DynamicResource TextBrush}"
+                                    StrokeThickness="2" StrokeStartLineCap="Round"
+                                    StrokeEndLineCap="Round"
+                                    StrokeLineJoin="Round" Data="M9,6 L15,12 L9,18" />
                             </Button>
                             <Button x:Name="HexSearchPreviousButton" DockPanel.Dock="Right"
                                 Width="24" Height="20" Margin="2,4,2,4" Padding="0"
                                 ToolTip="Find previous" Click="HexSearchPrevious_Click">
-                                <Path Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource TextBrush}"
-                                    StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                    StrokeLineJoin="Round" Data="M15,6 L9,12 L15,18"/>
+                                <Path Width="12" Height="12" Stretch="Uniform"
+                                    Stroke="{DynamicResource TextBrush}"
+                                    StrokeThickness="2" StrokeStartLineCap="Round"
+                                    StrokeEndLineCap="Round"
+                                    StrokeLineJoin="Round" Data="M15,6 L9,12 L15,18" />
                             </Button>
                             <Button x:Name="HexReplaceButton" DockPanel.Dock="Right" Width="64"
                                 Height="20" Margin="2,4,2,4" Padding="0"

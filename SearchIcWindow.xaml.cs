@@ -6,7 +6,7 @@ namespace NexusProgrammer;
 
 public partial class SearchIcWindow : Window
 {
-    private readonly List<IcCandidate> _allCandidates;
+    private List<IcCandidate> _allCandidates;
     private readonly ObservableCollection<IcCandidate> _visibleCandidates = [];
 
     public SearchIcWindow(IEnumerable<IcCandidate> candidates, string? jedecId)
@@ -35,6 +35,31 @@ public partial class SearchIcWindow : Window
     private void IcGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e) => SelectCurrent();
 
     private void Select_Click(object sender, RoutedEventArgs e) => SelectCurrent();
+
+    private void AddSpiNor_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new AddIcWindow(TryGetJedecFilter())
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true || dialog.Candidate is null)
+        {
+            return;
+        }
+
+        IcCatalogLoader.SaveUserCandidate(dialog.Candidate);
+        _allCandidates = IcCatalogLoader.LoadSpiCatalog();
+        FilterBox.Text = dialog.Candidate.Device;
+        RefreshFilter();
+        IcGrid.SelectedItem = _visibleCandidates.FirstOrDefault(candidate =>
+            candidate.Device.Equals(dialog.Candidate.Device, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string? TryGetJedecFilter()
+    {
+        var hex = new string(FilterBox.Text.Where(Uri.IsHexDigit).ToArray());
+        return hex.Length >= 6 && hex.Length % 2 == 0 ? FilterBox.Text : null;
+    }
 
     private void SelectCurrent()
     {

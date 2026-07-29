@@ -31,7 +31,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<SearchHit> _searchHits = [];
     private readonly List<ChipProfile> _chips = [];
 
-    private readonly List<IcCandidate> _icCatalog = [];
+    private List<IcCandidate> _icCatalog = [];
     private readonly DispatcherTimer _programmerMonitorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private IChipProgrammer _programmer = new MockProgrammer();
     private string _activeProgrammerKey = "none";
@@ -393,6 +393,29 @@ public partial class MainWindow : Window
     private void SearchIc_Click(object sender, RoutedEventArgs e)
     {
         ShowChipSelection(_icCatalog, "Search IC", null);
+    }
+
+    private void AddIc_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new AddIcWindow { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Candidate is null)
+        {
+            return;
+        }
+
+        AddUserIc(dialog.Candidate);
+    }
+
+    private void ReloadIcCatalog()
+    {
+        _icCatalog = IcCatalogLoader.LoadSpiCatalog();
+        foreach (var profile in _icCatalog.Select(x => x.Profile))
+        {
+            if (!_chips.Any(x => x.Name.Equals(profile.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                _chips.Add(profile);
+            }
+        }
     }
 
     private async void ReadChip_Click(object sender, RoutedEventArgs e)
@@ -1665,6 +1688,12 @@ public partial class MainWindow : Window
             }
 
             AppendLog("IC ID is not in the detection table. Opening full IC list");
+            if (MessageBox.Show($"IC ID {idText} is not in the catalog. Add it as a new SPI NOR IC?", "Add IC", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                AddIcFromJedecId(idText);
+                return;
+            }
+
             ShowChipSelection(_icCatalog, "Search IC", null);
             return;
         }
@@ -1682,6 +1711,25 @@ public partial class MainWindow : Window
         }
 
         ShowChipSelection(candidates, "Search IC", idText);
+    }
+
+    private void AddIcFromJedecId(string jedecId)
+    {
+        var dialog = new AddIcWindow(jedecId) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Candidate is null)
+        {
+            return;
+        }
+
+        AddUserIc(dialog.Candidate);
+    }
+
+    private void AddUserIc(IcCandidate candidate)
+    {
+        IcCatalogLoader.SaveUserCandidate(candidate);
+        ReloadIcCatalog();
+        ApplyChip(candidate.Profile);
+        AppendLog($"Added IC: {candidate.Device}, ID {candidate.JedecId}, {candidate.Size}");
     }
 
     private void ShowChipSelection(IEnumerable<IcCandidate> candidates, string title, string? idText)

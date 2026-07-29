@@ -1,0 +1,68 @@
+<Window x:Class="NexusProgrammer.AddIcWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add IC" Width="360" Height="330"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource AppBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="Segoe UI" FontSize="13">
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Height" Value="24"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Padding" Value="12,4"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="96"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Device" VerticalAlignment="Center"/>
+        <TextBox x:Name="DeviceBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Manufacturer" VerticalAlignment="Center"/>
+        <TextBox x:Name="ManufacturerBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" Text="GENERIC"/>
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="JEDEC ID" VerticalAlignment="Center"/>
+        <TextBox x:Name="JedecBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
+
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="Capacity" VerticalAlignment="Center"/>
+        <TextBox x:Name="CapacityBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"/>
+
+        <TextBlock Grid.Row="4" Grid.Column="0" Text="Page bytes" VerticalAlignment="Center"/>
+        <TextBox x:Name="PageBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,8" Text="256"/>
+
+        <TextBlock Grid.Row="5" Grid.Column="0" Text="Voltage" VerticalAlignment="Center"/>
+        <TextBox x:Name="VoltsBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,8" Text="3.3"/>
+
+        <TextBlock x:Name="ErrorText" Grid.Row="6" Grid.ColumnSpan="2" Foreground="#C62828" TextWrapping="Wrap"/>
+
+        <StackPanel Grid.Row="7" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" Width="76" Margin="0,0,8,0" Click="Cancel_Click"/>
+            <Button Content="Add" Width="76" Click="Add_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,3 @@
+# User-added SPI NOR catalog
+Device	Manufacturer	RawId	SizeBytes	PageSize	Volts	Protocol	CommandSet	Type	Supported
+XM25RH64C	XMC	204317	8388608	256	3.3	SPI	25xx	SPI_NOR	true
