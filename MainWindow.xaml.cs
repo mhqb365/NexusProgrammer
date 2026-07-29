@@ -6,7 +6,6 @@ using System.IO;
 using System.Media;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Threading;
@@ -23,29 +22,11 @@ public partial class MainWindow : Window
     private const int SearchHitContextBytes = 16;
     private const string MoonIconPath = "M12 3a6 6 0 0 0 9 9a9 9 0 1 1-9-9";
     private const string SunIconPath = "M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8 M12 2v2 M12 20v2 M4.93 4.93l1.41 1.41 M17.66 17.66l1.41 1.41 M2 12h2 M20 12h2 M4.93 19.07l1.41-1.41 M17.66 6.34l1.41-1.41";
-    private static readonly byte[] WindowsKeyMarker =
-    [
-        0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x1D, 0x00, 0x00, 0x00
-    ];
     private static readonly byte[] XgproMetadataMarker =
     [
         0x2D, 0x43, 0x6F, 0x6E, 0x66, 0x69, 0x67, 0x75,
         0x72, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x2D, 0x00
     ];
-    private static readonly Dictionary<string, string> KnownWindowsKeys = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["7H3HT-N36VD-XK866-8RV8Y-39M6M"] = "Win 10 RTM Core OEM:DM, EULA OEM",
-        ["TX9XD-98N7V-6WMQ6-BX7FG-H8Q99"] = "Windows 10/11 Home generic install key, Retail channel",
-        ["VK7JG-NPHTM-C97JM-9MPGT-3V66T"] = "Windows 10/11 Pro generic install key, Retail channel",
-        ["W269N-WFGWX-YVC9B-4J6C9-T83GX"] = "Windows 10/11 Pro generic install key, Volume KMS client",
-        ["NPPR9-FWDCX-D2C8J-H872K-2YT43"] = "Windows 10/11 Enterprise generic install key, Volume KMS client",
-        ["MH37W-N47XK-V7XM9-C7227-GCQG9"] = "Windows 10/11 Pro N generic install key, Retail channel",
-        ["NW6C2-QMPVW-D7KKK-3GKT6-VCFB2"] = "Windows 10/11 Education generic install key, Volume KMS client",
-        ["2WH4N-8QGBV-H22JP-CT43Q-MDWWJ"] = "Windows 10/11 Education N generic install key, Volume KMS client",
-    };
-
     private readonly ObservableCollection<HexRow> _rows = [];
     private readonly ObservableCollection<SearchHit> _searchHits = [];
     private readonly List<ChipProfile> _chips = [];
@@ -871,7 +852,7 @@ public partial class MainWindow : Window
         {
             var buffer = _buffer;
             AppendLog("Searching Windows key");
-            var candidates = await Task.Run(() => FindWindowsKeyCandidates(buffer));
+            var candidates = await Task.Run(() => WindowsKeyFinder.Find(buffer));
             if (candidates.Count == 0)
             {
                 AppendLog("Windows key not found");
@@ -893,206 +874,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private static List<WindowsKeyCandidate> FindWindowsKeyCandidates(byte[] buffer)
-    {
-        var candidates = new List<WindowsKeyCandidate>();
-        var knownOffsets = new HashSet<int>();
-
-        foreach (var markerOffset in FindAllBytes(buffer, WindowsKeyMarker))
-        {
-            if (TryFindWindowsProductKey(buffer, markerOffset + WindowsKeyMarker.Length, 256, out var key, out var keyOffset))
-            {
-                AddWindowsKeyCandidate(candidates, knownOffsets, "Hex marker", keyOffset, key);
-            }
-        }
-
-        foreach (var msdmOffset in FindAllAsciiText(buffer, Encoding.ASCII.GetBytes("MSDM")))
-        {
-            if (TryFindWindowsProductKey(buffer, msdmOffset, 512, out var key, out var keyOffset))
-            {
-                AddWindowsKeyCandidate(candidates, knownOffsets, "ACPI MSDM", keyOffset, key);
-            }
-        }
-
-        foreach (var anchor in new[] { "Windows", "Product", "ProductKey", "DigitalProductId" })
-        {
-            foreach (var anchorOffset in FindAllAsciiText(buffer, Encoding.ASCII.GetBytes(anchor)))
-            {
-                if (TryFindWindowsProductKey(buffer, anchorOffset, 768, out var key, out var keyOffset))
-                {
-                    AddWindowsKeyCandidate(candidates, knownOffsets, $"Near {anchor}", keyOffset, key);
-                }
-            }
-        }
-
-        foreach (var candidate in FindAllWindowsProductKeys(buffer))
-        {
-            AddWindowsKeyCandidate(candidates, knownOffsets, "Direct pattern", candidate.Offset, candidate.Key);
-        }
-
-        return candidates
-            .OrderBy(x => x.Method == "Hex marker" ? 0 : x.Method == "ACPI MSDM" ? 1 : x.Method.StartsWith("Near ", StringComparison.Ordinal) ? 2 : 3)
-            .ThenBy(x => x.Offset)
-            .ToList();
-    }
-
-    private static void AddWindowsKeyCandidate(List<WindowsKeyCandidate> candidates, HashSet<int> knownOffsets, string method, int offset, string key)
-    {
-        if (knownOffsets.Add(offset))
-        {
-            candidates.Add(new WindowsKeyCandidate(method, offset, key, 29, DescribeWindowsKey(key, method)));
-        }
-    }
-
-    private static string DescribeWindowsKey(string key, string method)
-    {
-        if (TryGetPidGenXDescription(key, out var pidGenXDescription))
-        {
-            return pidGenXDescription;
-        }
-
-        if (KnownWindowsKeys.TryGetValue(key, out var known))
-        {
-            return known;
-        }
-
-        if (method is "Hex marker" or "ACPI MSDM")
-        {
-            return "likely OEM:DM embedded key";
-        }
-
-        if (method.Contains("DigitalProductId", StringComparison.OrdinalIgnoreCase))
-        {
-            return "likely installed Windows product key";
-        }
-
-        if (method.StartsWith("Near ", StringComparison.Ordinal))
-        {
-            return "possible Windows product key";
-        }
-
-        return "product key candidate";
-    }
-
-    private static bool TryGetPidGenXDescription(string key, out string description)
-    {
-        description = string.Empty;
-        var pkeyConfig = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "spp", "tokens", "pkeyconfig", "pkeyconfig.xrm-ms");
-        if (!File.Exists(pkeyConfig))
-        {
-            return false;
-        }
-
-        var buffer = new byte[0x04F8];
-        buffer[0] = 0xF8;
-        buffer[1] = 0x04;
-        var nativeBuffer = IntPtr.Zero;
-        try
-        {
-            nativeBuffer = Marshal.AllocHGlobal(buffer.Length);
-            Marshal.Copy(buffer, 0, nativeBuffer, buffer.Length);
-
-            var result = PidGenX(key, pkeyConfig, "00000", 0, IntPtr.Zero, IntPtr.Zero, nativeBuffer);
-            if (result != 0)
-            {
-                return false;
-            }
-
-            Marshal.Copy(nativeBuffer, buffer, 0, buffer.Length);
-            var strings = ExtractPrintableUnicodeStrings(buffer).ToList();
-            var channel = ReadUnicodeString(buffer, 1016, 128);
-            var edition = strings.FirstOrDefault(IsLikelyWindowsEdition);
-            var eula = strings.FirstOrDefault(x => x is "OEM" or "Retail" or "Volume");
-            if (string.IsNullOrWhiteSpace(channel) && edition is null && eula is null)
-            {
-                return false;
-            }
-
-            var parts = new List<string>();
-            if (!string.IsNullOrWhiteSpace(edition))
-            {
-                parts.Add(edition);
-            }
-
-            if (!string.IsNullOrWhiteSpace(channel))
-            {
-                parts.Add(channel);
-            }
-
-            if (!string.IsNullOrWhiteSpace(eula))
-            {
-                parts.Add($"EULA {eula}");
-            }
-
-            description = string.Join(", ", parts);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-        finally
-        {
-            if (nativeBuffer != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(nativeBuffer);
-            }
-        }
-    }
-
-    private static IEnumerable<string> ExtractPrintableUnicodeStrings(byte[] buffer)
-    {
-        var text = Encoding.Unicode.GetString(buffer);
-        var builder = new StringBuilder();
-        foreach (var ch in text)
-        {
-            if (ch is >= ' ' and <= '~')
-            {
-                builder.Append(ch);
-                continue;
-            }
-
-            if (builder.Length >= 3)
-            {
-                yield return builder.ToString();
-            }
-
-            builder.Clear();
-        }
-
-        if (builder.Length >= 3)
-        {
-            yield return builder.ToString();
-        }
-    }
-
-    private static string ReadUnicodeString(byte[] buffer, int offset, int byteCount) =>
-        offset + byteCount > buffer.Length ? string.Empty : Encoding.Unicode.GetString(buffer, offset, byteCount).TrimEnd('\0').Trim();
-
-    private static bool IsLikelyWindowsEdition(string value)
-    {
-        if (value.Contains('-') || value.Contains('.') || Guid.TryParse(value, out _))
-        {
-            return false;
-        }
-
-        return value.Contains("Core", StringComparison.OrdinalIgnoreCase) ||
-               value.Contains("Professional", StringComparison.OrdinalIgnoreCase) ||
-               value.Contains("Enterprise", StringComparison.OrdinalIgnoreCase) ||
-               value.Contains("Education", StringComparison.OrdinalIgnoreCase) ||
-               value.Contains("Server", StringComparison.OrdinalIgnoreCase);
-    }
-
-    [DllImport("pidgenx.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Winapi)]
-    private static extern int PidGenX(
-        string productKey,
-        string pkeyConfigPath,
-        string mpcId,
-        int unknown,
-        IntPtr productId,
-        IntPtr digitalProductId,
-        IntPtr digitalProductId4);
-
     private void ShowWindowsKeyHits(IReadOnlyList<WindowsKeyCandidate> candidates)
     {
         _searchHits.Clear();
@@ -1100,90 +881,6 @@ public partial class MainWindow : Window
         {
             _searchHits.Add(CreateSearchHit(candidate.Offset, candidate.Length));
         }
-    }
-
-    private static List<WindowsKeyCandidate> FindAllWindowsProductKeys(byte[] buffer)
-    {
-        var candidates = new List<WindowsKeyCandidate>();
-        for (var offset = 0; offset <= buffer.Length - 29; offset++)
-        {
-            if (!LooksLikeWindowsProductKey(buffer, offset))
-            {
-                continue;
-            }
-
-            var key = ReadWindowsProductKey(buffer, offset);
-            candidates.Add(new WindowsKeyCandidate("Direct pattern", offset, key, 29, DescribeWindowsKey(key, "Direct pattern")));
-            offset += 28;
-        }
-
-        return candidates;
-    }
-
-    private static bool TryFindWindowsProductKey(byte[] buffer, int startOffset, int maxDistance, out string key, out int keyOffset)
-    {
-        key = string.Empty;
-        keyOffset = -1;
-        var searchEnd = Math.Min(buffer.Length, startOffset + maxDistance);
-        for (var offset = Math.Max(0, startOffset); offset <= searchEnd - 29; offset++)
-        {
-            if (!LooksLikeWindowsProductKey(buffer, offset))
-            {
-                continue;
-            }
-
-            key = ReadWindowsProductKey(buffer, offset);
-            keyOffset = offset;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool LooksLikeWindowsProductKey(byte[] buffer, int offset)
-    {
-        for (var i = 0; i < 29; i++)
-        {
-            var value = buffer[offset + i];
-            if (i is 5 or 11 or 17 or 23)
-            {
-                if (value != '-')
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            if (!IsWindowsProductKeyChar(value))
-            {
-                return false;
-            }
-        }
-
-        return IsPlausibleWindowsProductKey(ReadWindowsProductKey(buffer, offset));
-    }
-
-    private static bool IsWindowsProductKeyChar(byte value) =>
-        value is >= (byte)'A' and <= (byte)'Z' ||
-        value is >= (byte)'a' and <= (byte)'z' ||
-        value is >= (byte)'0' and <= (byte)'9';
-
-    private static string ReadWindowsProductKey(byte[] buffer, int offset) =>
-        Encoding.ASCII.GetString(buffer, offset, 29).ToUpperInvariant();
-
-    private static bool IsPlausibleWindowsProductKey(string key)
-    {
-        var compact = key.Replace("-", string.Empty, StringComparison.Ordinal);
-        if (!compact.Any(char.IsLetter) || !compact.Any(char.IsDigit))
-        {
-            return false;
-        }
-
-        var groups = key.Split('-');
-        return groups.Length == 5 &&
-               groups.Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1 &&
-               compact.Distinct().Count() >= 6;
     }
 
     private async Task<SearchResult> TryResolveSearchOffsetAsync(string mode, string query, bool forward)
