@@ -1,6 +1,6 @@
-# NexusProgrammer
+# Nexus Programmer
 
-NexusProgrammer is a Windows utility app for CH34x and XGecu T48.
+Nexus Programmer is a Windows utility app for CH34x and XGecu T48.
 It focuses on SPI NOR flash chips. It can detect a programmer, search/select SPI NOR chips, read/write/verify buffers and erase chips
 
 ## Features

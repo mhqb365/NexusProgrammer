@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <AssemblyName>NexusProgrammer</AssemblyName>
-    <Product>NexusProgrammer</Product>
+    <AssemblyName>Nexus Programmer</AssemblyName>
+    <Product>Nexus Programmer</Product>
     <Authors>mhqb365.com</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/mhqb365/NexusProgrammer</RepositoryUrl>
@@ -15,7 +15,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="icon.ico" />
+    <Resource Include="icon.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <Content Include="Catalog\CH34x_SPI_NOR.tsv" Link="IntegratedICCatalog.tsv"

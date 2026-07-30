@@ -3,7 +3,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:NexusProgrammer"
     xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
-    xmlns:sys="clr-namespace:System;assembly=mscorlib" Title="NexusProgrammer" Height="620"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib" Title="Nexus Programmer" Icon="icon.ico" Height="620"
     Width="960"
     MinHeight="620" MinWidth="960" FontFamily="Segoe UI" FontSize="13"
     Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource TextBrush}">

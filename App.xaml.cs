@@ -12,7 +12,7 @@ public partial class App : Application
         DispatcherUnhandledException += (_, args) =>
         {
             WriteCrashLog(args.Exception);
-            MessageBox.Show(args.Exception.Message, "NexusProgrammer", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(args.Exception.Message, "Nexus Programmer", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
     }
