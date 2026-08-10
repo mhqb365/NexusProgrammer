@@ -425,11 +425,17 @@ public partial class MainWindow : Window
             return;
         }
 
+        var chip = CurrentChip();
+        if (!ConfirmVoltageAdapterIfNeeded(chip, "read"))
+        {
+            return;
+        }
+
         await RunOperationAsync("Read chip", _buffer.Length, async progress =>
         {
             var startAddress = ParseStartAddress();
             AppendLog($"Read request: {FormatBytes(_buffer.Length)} from 0x{startAddress:X6}");
-            _buffer = await _programmer.ReadAsync(CurrentChip(), startAddress, _buffer.Length, progress);
+            _buffer = await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress);
             RebuildRows();
             UpdateStatus();
         });
@@ -442,9 +448,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        var chip = CurrentChip();
+        if (!ConfirmVoltageAdapterIfNeeded(chip, "write"))
+        {
+            return;
+        }
+
         await RunOperationAsync("Write chip", _buffer.Length, async progress =>
         {
-            var chip = CurrentChip();
             var startAddress = ParseStartAddress();
             var skipBlankPages = SkipBlankPagesCheckBox.IsChecked == true;
             AppendLog($"Write request: {FormatBytes(_buffer.Length)} to 0x{startAddress:X6}{(skipBlankPages ? " (skip FF pages)" : "")}");
@@ -460,11 +471,17 @@ public partial class MainWindow : Window
             return;
         }
 
+        var chip = CurrentChip();
+        if (!ConfirmVoltageAdapterIfNeeded(chip, "verify"))
+        {
+            return;
+        }
+
         await RunOperationAsync("Verify", _buffer.Length, async progress =>
         {
             var startAddress = ParseStartAddress();
             AppendLog($"Verify request: {FormatBytes(_buffer.Length)} at 0x{startAddress:X6}");
-            var ok = await _programmer.VerifyAsync(CurrentChip(), startAddress, _buffer, progress);
+            var ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
             AppendLog(ok ? "Verify OK" : "Verify failed");
         });
     }
@@ -476,14 +493,19 @@ public partial class MainWindow : Window
             return;
         }
 
+        var chip = CurrentChip();
+        if (!ConfirmVoltageAdapterIfNeeded(chip, "erase"))
+        {
+            return;
+        }
+
         if (MessageBox.Show("Erase selected IC?", "Confirm erase", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
         {
             return;
         }
 
-        await RunOperationAsync("Erase chip", CurrentChip().SizeBytes, async progress =>
+        await RunOperationAsync("Erase chip", chip.SizeBytes, async progress =>
         {
-            var chip = CurrentChip();
             await UnprotectIfRequestedAsync(chip, progress);
             await _programmer.EraseAsync(chip, progress);
         });
@@ -1528,9 +1550,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        var chip = CurrentChip();
+        if (!ConfirmVoltageAdapterIfNeeded(chip, script))
+        {
+            return;
+        }
+
         await RunOperationAsync(script, _buffer.Length, async progress =>
         {
-            var chip = CurrentChip();
             var startAddress = ParseStartAddress();
             if (string.Equals(script, "Read + verify", StringComparison.OrdinalIgnoreCase))
             {
@@ -1669,6 +1696,35 @@ public partial class MainWindow : Window
 
     private ChipProfile CurrentChip() => ChipCombo.SelectedItem as ChipProfile ?? _chips[0];
 
+    private bool ConfirmVoltageAdapterIfNeeded(ChipProfile chip, string operationName)
+    {
+        if (!Requires1V8Adapter(chip))
+        {
+            return true;
+        }
+
+        var result = MessageBox.Show(
+            $"{chip.Name} is listed as {chip.Volts}.\n\nUse a 1.8V adapter / level shifter before {operationName}. Continue only if the adapter is connected.",
+            "1.8V IC",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result == MessageBoxResult.Yes)
+        {
+            AppendLog($"1.8V adapter confirmed for {chip.Name}");
+            return true;
+        }
+
+        AppendLog($"Cancelled {operationName}: {chip.Name} requires a 1.8V adapter");
+        return false;
+    }
+
+    private static bool Requires1V8Adapter(ChipProfile chip)
+    {
+        var volts = chip.Volts.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
+        return volts.Contains("1.8", StringComparison.OrdinalIgnoreCase) ||
+               volts.Contains("1V8", StringComparison.OrdinalIgnoreCase);
+    }
+
     private void ShowChipSelectionForId(byte[] id, bool autoApplySingle = false, bool openCatalogOnMiss = true)
     {
         if (id.Length == 0)
@@ -1678,6 +1734,17 @@ public partial class MainWindow : Window
         }
 
         var idText = FormatId(id);
+        if (IsInvalidJedecId(id))
+        {
+            AppendLog($"Invalid IC ID {idText}. Check IC contact, orientation, pinout, adapter voltage, and clip wiring.");
+            MessageBox.Show(
+                $"Invalid IC ID {idText}.\n\nCheck IC contact, orientation, pinout, adapter voltage, and clip wiring.",
+                "Detect IC",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         var candidates = FindCandidatesByJedecId(id).ToList();
         if (candidates.Count == 0)
         {
@@ -1711,6 +1778,21 @@ public partial class MainWindow : Window
         }
 
         ShowChipSelection(candidates, "Search IC", idText);
+    }
+
+    private static bool IsInvalidJedecId(byte[] id)
+    {
+        if (id.Length == 0)
+        {
+            return true;
+        }
+
+        if (id.All(value => value == 0x00) || id.All(value => value == 0xFF))
+        {
+            return true;
+        }
+
+        return id.Length >= 3 && id[0] == 0x03 && id[1] == 0x00 && id[2] == 0x00;
     }
 
     private void AddIcFromJedecId(string jedecId)

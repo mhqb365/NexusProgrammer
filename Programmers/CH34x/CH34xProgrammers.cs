@@ -7,9 +7,9 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 {
     private const int DeviceIndex = 0;
     private const uint ChipSelect = 0x80;
-    private const int ReadChunkSize = 32768;
+    private const int ReadChunkSize = 256 * 1024;
     private const int I2cReadChunkSize = 512;
-    private const int PageProgramDelayMs = 1;
+    private const int WriteReadyTimeoutMs = 500;
 
     public string Name => "CH347 native DLL";
 
@@ -79,10 +79,11 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             var count = Math.Min(ReadChunkSize, length - done);
             var address = startAddress + done;
             var addressBytes = Uses4ByteAddress(chip, address) ? 4 : 3;
-            var command = new byte[count + 1 + addressBytes];
-            WriteAddress(command, 0, 0x03, 0x13, address, addressBytes);
-            var response = SpiTransfer(command);
-            Buffer.BlockCopy(response, command.Length - count, result, done, count);
+            var command = new byte[1 + addressBytes + 1];
+            WriteAddress(command, 0, 0x0B, 0x0C, address, addressBytes);
+            command[^1] = 0x00;
+            var response = SpiRead(command, count);
+            Buffer.BlockCopy(response, 0, result, done, count);
             done += count;
             progress.Report(length == 0 ? 100 : done * 100 / length);
         }
@@ -103,6 +104,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         EnsureSpi(chip);
         using var spiDevice = OpenDevice();
         var done = 0;
+        var lastProgress = -1;
 
         while (done < data.Length)
         {
@@ -111,7 +113,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             if (skipBlankPages && IsBlank(data, done, count))
             {
                 done += count;
-                progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+                ReportProgress(progress, data.Length, done, ref lastProgress);
                 continue;
             }
 
@@ -127,7 +129,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             await WaitUntilReadyAsync();
 
             done += count;
-            progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+            ReportProgress(progress, data.Length, done, ref lastProgress);
         }
 
         progress.Report(100);
@@ -190,6 +192,12 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             throw new InvalidOperationException("Cannot open CH347. Check USB connection, WCH CH347 driver, and that no other programmer software is using it.");
         }
 
+        if (!NativeMethods.CH347SPI_Init(DeviceIndex, SpiConfig.Default))
+        {
+            NativeMethods.CH347CloseDevice(DeviceIndex);
+            throw new InvalidOperationException("Cannot configure CH347 SPI controller.");
+        }
+
         return new Ch347Device();
     }
 
@@ -205,6 +213,26 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         }
 
         return io;
+    }
+
+    private static byte[] SpiRead(byte[] command, int readLength)
+    {
+        var io = new byte[command.Length + readLength];
+        Buffer.BlockCopy(command, 0, io, 0, command.Length);
+        var length = (uint)readLength;
+        if (!NativeMethods.CH347SPI_Read(DeviceIndex, ChipSelect, (uint)command.Length, ref length, io))
+        {
+            throw new IOException("CH347 SPI read failed.");
+        }
+
+        if (length < readLength)
+        {
+            throw new IOException($"CH347 SPI read returned {length} byte(s), expected {readLength} byte(s).");
+        }
+
+        var result = new byte[readLength];
+        Buffer.BlockCopy(io, 0, result, 0, readLength);
+        return result;
     }
 
     private static byte[] ReadI2cEeprom(ChipProfile chip, int startAddress, int length, IProgress<int> progress)
@@ -235,6 +263,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
     private static async Task WriteI2cEepromAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages)
     {
         var done = 0;
+        var lastProgress = -1;
         while (done < data.Length)
         {
             var address = startAddress + done;
@@ -243,7 +272,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             if (skipBlankPages && IsBlank(data, done, count))
             {
                 done += count;
-                progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+                ReportProgress(progress, data.Length, done, ref lastProgress);
                 continue;
             }
 
@@ -255,7 +284,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             }
 
             done += count;
-            progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+            ReportProgress(progress, data.Length, done, ref lastProgress);
             await Task.Delay(6);
         }
 
@@ -303,6 +332,18 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         return true;
     }
 
+    private static void ReportProgress(IProgress<int> progress, int total, int done, ref int lastProgress)
+    {
+        var value = total == 0 ? 100 : Math.Clamp(done * 100 / total, 0, 100);
+        if (value == lastProgress)
+        {
+            return;
+        }
+
+        lastProgress = value;
+        progress.Report(value);
+    }
+
     private static void WriteEnable() => SpiTransfer([0x06]);
 
     private static bool IsBusy()
@@ -333,16 +374,17 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         progress.Report(100);
     }
 
-    private static async Task WaitUntilReadyAsync()
+    private static Task WaitUntilReadyAsync()
     {
-        for (var i = 0; i < 500; i++)
+        var timeoutAt = Environment.TickCount64 + WriteReadyTimeoutMs;
+        while (Environment.TickCount64 < timeoutAt)
         {
             if (!IsBusy())
             {
-                return;
+                return Task.CompletedTask;
             }
 
-            await Task.Delay(PageProgramDelayMs);
+            Thread.Sleep(0);
         }
 
         throw new TimeoutException("Write timeout. Chip still reports WIP=1.");
@@ -396,9 +438,72 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CH347StreamSPI4(int index, uint chipSelect, uint length, byte[] buffer);
 
+        [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347SPI_Init", CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CH347SPI_Init(int index, in SpiConfig spiConfig);
+
+        [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347SPI_Read", CallingConvention = CallingConvention.Winapi)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CH347SPI_Read(int index, uint chipSelect, uint writeLength, ref uint readLength, byte[] buffer);
+
         [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347StreamI2C", CallingConvention = CallingConvention.Winapi)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CH347StreamI2C(int index, uint writeLength, byte[] writeBuffer, uint readLength, byte[] readBuffer);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct SpiConfig
+    {
+        private readonly byte mode;
+        private readonly byte clock;
+        private readonly byte byteOrder;
+        private readonly ushort writeReadInterval;
+        private readonly byte outDefaultData;
+        private readonly uint chipSelect;
+        private readonly byte cs1Polarity;
+        private readonly byte cs2Polarity;
+        private readonly ushort isAutoDeactivateCs;
+        private readonly ushort activeDelay;
+        private readonly uint delayDeactivate;
+
+        private SpiConfig(
+            byte mode,
+            byte clock,
+            byte byteOrder,
+            ushort writeReadInterval,
+            byte outDefaultData,
+            uint chipSelect,
+            byte cs1Polarity,
+            byte cs2Polarity,
+            ushort isAutoDeactivateCs,
+            ushort activeDelay,
+            uint delayDeactivate)
+        {
+            this.mode = mode;
+            this.clock = clock;
+            this.byteOrder = byteOrder;
+            this.writeReadInterval = writeReadInterval;
+            this.outDefaultData = outDefaultData;
+            this.chipSelect = chipSelect;
+            this.cs1Polarity = cs1Polarity;
+            this.cs2Polarity = cs2Polarity;
+            this.isAutoDeactivateCs = isAutoDeactivateCs;
+            this.activeDelay = activeDelay;
+            this.delayDeactivate = delayDeactivate;
+        }
+
+        public static readonly SpiConfig Default = new(
+            mode: 0,
+            clock: 1,
+            byteOrder: 1,
+            writeReadInterval: 0,
+            outDefaultData: 0xFF,
+            chipSelect: ChipSelect,
+            cs1Polarity: 0,
+            cs2Polarity: 0,
+            isAutoDeactivateCs: 1,
+            activeDelay: 0,
+            delayDeactivate: 0);
     }
 }
 
