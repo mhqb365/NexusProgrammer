@@ -572,17 +572,14 @@
                 </StackPanel>
             </Border>
 
-            <TabControl Grid.Row="0" Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="0,1,1,1">
-                <TabItem x:Name="MainMemoryTab" Header="Main Memory">
-                    <Grid Background="{DynamicResource SurfaceBackgroundBrush}">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="34" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+            <Grid Grid.Row="0" Grid.Column="1" Background="{DynamicResource SurfaceBackgroundBrush}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="34" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-                        <DockPanel Grid.Row="0" Background="{DynamicResource SubtleBackgroundBrush}"
-                            LastChildFill="True" Margin="0,0,0,1">
+                <DockPanel Grid.Row="0" Background="{DynamicResource SubtleBackgroundBrush}"
+                    LastChildFill="True" Margin="0,0,0,1">
                             <TextBlock DockPanel.Dock="Left" Text="Hex Editor" FontWeight="SemiBold"
                                 Margin="10,0,10,0" VerticalAlignment="Center" />
                             <Button x:Name="WindowsKeySearchButton" DockPanel.Dock="Right"
@@ -634,8 +631,12 @@
                                 ToolTip="Hex/Text finds an offset. Offset mode opens that page for editing."
                                 KeyDown="HexSearchBox_KeyDown"
                                 TextChanged="HexSearchBox_TextChanged" Text="" />
-                        </DockPanel>
+                </DockPanel>
 
+                <TabControl x:Name="MemoryTabControl" Grid.Row="1"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,1,1"
+                    SelectionChanged="MemoryTabControl_SelectionChanged">
+                    <TabItem x:Name="Bios1Tab" Header="Memory 1" Tag="1">
                         <Grid Grid.Row="1" AllowDrop="True"
                             PreviewDragOver="HexEditor_DragOver"
                             Drop="HexEditor_Drop">
@@ -650,9 +651,10 @@
                             <ScrollBar x:Name="HexScrollBar" Grid.Column="1" Orientation="Vertical"
                                 Minimum="0" ValueChanged="HexScrollBar_ValueChanged" />
                         </Grid>
-                    </Grid>
-                </TabItem>
-            </TabControl>
+                    </TabItem>
+                    <TabItem x:Name="AddMemoryTab" Header="+" ToolTip="Add Memory tab" />
+                </TabControl>
+            </Grid>
 
             <GridSplitter Grid.Row="1" Grid.Column="1" Height="5" HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch" Background="{DynamicResource SplitterBrush}"

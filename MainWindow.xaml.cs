@@ -8,6 +8,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using System.Windows.Media;
 
@@ -30,12 +32,15 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<HexRow> _rows = [];
     private readonly ObservableCollection<SearchHit> _searchHits = [];
     private readonly List<ChipProfile> _chips = [];
+    private readonly Dictionary<TabItem, MemoryTabState> _memoryTabs = [];
 
     private List<IcCandidate> _icCatalog = [];
     private readonly DispatcherTimer _programmerMonitorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private IChipProgrammer _programmer = new MockProgrammer();
     private string _activeProgrammerKey = "none";
     private byte[] _buffer = [];
+    private MemoryTabState? _activeMemoryTab;
+    private int _nextBiosTabIndex = 2;
     private int _previewStartOffset;
     private int _currentOffset;
     private bool _isBusy;
@@ -53,6 +58,8 @@ public partial class MainWindow : Window
         {
             throw new InvalidOperationException("No SPI IC catalog entries found.");
         }
+        _activeMemoryTab = new MemoryTabState(1, Bios1Tab, HexEditor, HexScrollBar, _buffer);
+        _memoryTabs[Bios1Tab] = _activeMemoryTab;
         SearchHitsGrid.ItemsSource = _searchHits;
         HexEditor.SetBuffer(_buffer, OnHexCellChanged);
         UpdateHexScrollBar();
@@ -127,6 +134,104 @@ public partial class MainWindow : Window
         }
     }
 
+    private void MemoryTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, MemoryTabControl) || MemoryTabControl.SelectedItem is not TabItem selectedTab)
+        {
+            return;
+        }
+
+        if (selectedTab == AddMemoryTab)
+        {
+            AddBiosTab();
+            return;
+        }
+
+        if (ActivateMemoryTab(selectedTab) && IsLoaded)
+        {
+            AppendLog($"Selected {selectedTab.Header}");
+        }
+    }
+
+    private TabItem AddBiosTab()
+    {
+        var index = _nextBiosTabIndex++;
+        var tab = new TabItem
+        {
+            Header = $"Memory {index}",
+            Tag = index
+        };
+        _memoryTabs[tab] = CreateMemoryTabState(index, tab);
+
+        MemoryTabControl.Items.Insert(Math.Max(0, MemoryTabControl.Items.Count - 1), tab);
+        MemoryTabControl.SelectedItem = tab;
+        return tab;
+    }
+
+    private MemoryTabState CreateMemoryTabState(int index, TabItem tab)
+    {
+        var editor = new HexEditorView
+        {
+            Background = (Brush)FindResource("SurfaceBackgroundBrush"),
+            Foreground = (Brush)FindResource("TextBrush")
+        };
+        editor.ScrollChanged += (_, args) => HexEditor_ScrollChanged(editor, args);
+
+        var scrollBar = new ScrollBar
+        {
+            Orientation = Orientation.Vertical,
+            Minimum = 0
+        };
+        scrollBar.ValueChanged += HexScrollBar_ValueChanged;
+
+        var grid = new Grid
+        {
+            Background = (Brush)FindResource("SurfaceBackgroundBrush"),
+            AllowDrop = true
+        };
+        grid.PreviewDragOver += HexEditor_DragOver;
+        grid.Drop += HexEditor_Drop;
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
+
+        Grid.SetColumn(editor, 0);
+        Grid.SetColumn(scrollBar, 1);
+        grid.Children.Add(editor);
+        grid.Children.Add(scrollBar);
+
+        tab.Content = grid;
+        var buffer = CreateBlankBuffer();
+        editor.SetBuffer(buffer, OnHexCellChanged);
+        return new MemoryTabState(index, tab, editor, scrollBar, buffer);
+    }
+
+    private bool ActivateMemoryTab(TabItem tab)
+    {
+        if (!_memoryTabs.TryGetValue(tab, out var state))
+        {
+            return false;
+        }
+
+        if (_activeMemoryTab == state)
+        {
+            return false;
+        }
+
+        if (_activeMemoryTab is not null)
+        {
+            _activeMemoryTab.Buffer = _buffer;
+        }
+
+        _activeMemoryTab = state;
+        HexEditor = state.Editor;
+        HexScrollBar = state.ScrollBar;
+        _buffer = state.Buffer;
+        HexEditor.SetBuffer(_buffer, OnHexCellChanged);
+        UpdateHexScrollBar();
+        UpdateStatus();
+        return true;
+    }
+
     private void SelectSize(int bytes)
     {
         foreach (var item in SizeCombo.Items.OfType<SizeOption>())
@@ -141,14 +246,32 @@ public partial class MainWindow : Window
 
     private void ResizeBuffer(int size, byte fill)
     {
-        _buffer = new byte[size];
+        var buffer = new byte[size];
         if (fill != 0)
         {
-            Array.Fill(_buffer, fill);
+            Array.Fill(buffer, fill);
         }
 
+        SetActiveBuffer(buffer);
         RebuildRows();
         UpdateStatus();
+    }
+
+    private byte[] CreateBlankBuffer()
+    {
+        var size = CurrentChip().SizeBytes;
+        var buffer = new byte[size];
+        Array.Fill(buffer, (byte)0xFF);
+        return buffer;
+    }
+
+    private void SetActiveBuffer(byte[] buffer)
+    {
+        _buffer = buffer;
+        if (_activeMemoryTab is not null)
+        {
+            _activeMemoryTab.Buffer = buffer;
+        }
     }
 
     private void RebuildRows(int startOffset = 0)
@@ -456,7 +579,7 @@ public partial class MainWindow : Window
         {
             var startAddress = ParseStartAddress();
             AppendLog($"Read request: {FormatBytes(_buffer.Length)} from 0x{startAddress:X6}");
-            _buffer = await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress);
+            SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
             RebuildRows();
             UpdateStatus();
         });
@@ -1494,7 +1617,7 @@ public partial class MainWindow : Window
 
     private void LoadBufferFromFile(string fileName)
     {
-        _buffer = StripXgproMetadata(File.ReadAllBytes(fileName), out var markerOffset, out var removedBytes);
+        SetActiveBuffer(StripXgproMetadata(File.ReadAllBytes(fileName), out var markerOffset, out var removedBytes));
         _currentOffset = 0;
         _searchHits.Clear();
         RebuildRows();
@@ -1584,7 +1707,7 @@ public partial class MainWindow : Window
             {
                 AppendLog($"Script request: read and verify {FormatBytes(_buffer.Length)} from 0x{startAddress:X6}");
                 AppendLog("Script stage: read started");
-                _buffer = await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress);
+                SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
                 RebuildRows();
                 UpdateStatus();
                 AppendLog("Script stage: read completed");
@@ -1965,6 +2088,24 @@ public partial class MainWindow : Window
             ? $"{bytesPerSecond / (1024 * 1024):0.##} MB/s"
             : $"{bytesPerSecond / 1024:0.##} KB/s";
     }
+}
+
+internal sealed class MemoryTabState
+{
+    public MemoryTabState(int index, TabItem tab, HexEditorView editor, ScrollBar scrollBar, byte[] buffer)
+    {
+        Index = index;
+        Tab = tab;
+        Editor = editor;
+        ScrollBar = scrollBar;
+        Buffer = buffer;
+    }
+
+    public int Index { get; }
+    public TabItem Tab { get; }
+    public HexEditorView Editor { get; }
+    public ScrollBar ScrollBar { get; }
+    public byte[] Buffer { get; set; }
 }
 
 
