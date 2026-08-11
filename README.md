@@ -6,8 +6,7 @@
 
 English | [Tiếng Việt](#tiếng-việt)
 
-Nexus Programmer is a Windows utility app for CH34x and XGecu T48
-It focuses on SPI NOR flash chips. It can detect a programmer, detect/search/select SPI NOR chips, read/write/verify buffers and erase chips
+Nexus Programmer is a Windows utility app for CH34x and XGecu T48. It focuses on SPI NOR flash chips. It can detect a programmer, detect/search/select SPI NOR chips, read/write/verify buffers and erase chips
 
 ## Features
 
@@ -22,8 +21,8 @@ It focuses on SPI NOR flash chips. It can detect a programmer, detect/search/sel
 
 - Windows
 - .NET 8 SDK
-- WCH CH341/CH347 driver
-- XGecu WinUSB driver for T48 hardware access. So you need to install Xgpro software first to get the driver
+- WCH CH341/CH347 driver. Download and install it from [CH341SER.zip](docs/CH341SER.zip)
+- XGecu WinUSB driver for T48 hardware access. So you need to install [XGecu Software](https://github.com/Kreeblah/XGecu_Software) first to get the driver
 
 ## Download
 
@@ -41,8 +40,7 @@ and `flashrom-data/COPYING.rst`
 
 [English](#english) | Tiếng Việt
 
-Nexus Programmer là ứng dụng Windows dành cho CH34x và XGecu T48
-Dự án tập trung vào chip SPI NOR flash. Ứng dụng có thể nhận dạng máy nạp, nhận dạng/tìm kiếm/chọn IC SPI NOR, đọc/ghi/xác minh buffer và xóa chip
+Nexus Programmer là ứng dụng Windows dành cho CH34x và XGecu T48. Dự án tập trung vào chip SPI NOR flash. Ứng dụng có thể nhận dạng máy nạp, nhận dạng/tìm kiếm/chọn IC SPI NOR, đọc/ghi/xác minh buffer và xóa chip
 
 ## Tính năng
 
@@ -57,8 +55,8 @@ Dự án tập trung vào chip SPI NOR flash. Ứng dụng có thể nhận dạ
 
 - Windows
 - .NET 8 SDK
-- Driver WCH CH341/CH347
-- Driver XGecu WinUSB để truy cập phần cứng T48. Cần cài phần mềm Xgpro trước để có driver
+- Driver WCH CH341/CH347. Tải cái này về cài vào [CH341SER.zip](docs/CH341SER.zip)
+- Driver XGecu WinUSB để truy cập phần cứng T48. Cần cài [phần mềm XGecu](https://github.com/Kreeblah/XGecu_Software) trước để có driver
 
 ## Tải về
 
