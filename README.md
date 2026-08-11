@@ -1,48 +1,71 @@
 # Nexus Programmer
 
-Nexus Programmer is a Windows utility app for CH34x and XGecu T48.
-It focuses on SPI NOR flash chips. It can detect a programmer, search/select SPI NOR chips, read/write/verify buffers and erase chips
+![Nexus Programmer](NexusProgrammer.png)
+
+## English
+
+English | [Tiếng Việt](#tiếng-việt)
+
+Nexus Programmer is a Windows utility app for CH34x and XGecu T48
+It focuses on SPI NOR flash chips. It can detect a programmer, detect/search/select SPI NOR chips, read/write/verify buffers and erase chips
 
 ## Features
 
-- CH341, CH347, and XGecu T48 programmer detection.
-- SPI NOR catalog search with JEDEC ID matching.
-- Separate SPI NOR catalogs for CH34x and XGecu T48.
-- Hex buffer preview/editor.
-- Read, write, verify, erase, and script workflows.
-- Light/dark mode.
+- CH341, CH347, and XGecu T48 programmer detection
+- SPI NOR catalog search with JEDEC ID matching, add new chips if not found
+- Separate SPI NOR catalogs for CH34x and XGecu T48
+- Hex buffer preview/editor
+- Read, write, verify, erase, and script workflows
+- Light/dark mode
 
 ## Requirements
 
-- Windows.
-- .NET 8 SDK to build from source.
-- WCH CH341/CH347 driver and native DLLs for programmer hardware access.
-- XGecu WinUSB driver for T48 hardware access.
+- Windows
+- .NET 8 SDK
+- WCH CH341/CH347 driver
+- XGecu WinUSB driver for T48 hardware access. So you need to install Xgpro software first to get the driver
 
-The app looks for the native WCH DLLs next to the EXE or in the Windows system
-directory. Without hardware/DLL access, programmer-dependent actions are disabled.
+## Download
 
-## Build
-
-```powershell
-dotnet build "NexusProgrammer.csproj"
-```
-
-Output is written to `bin/Debug/net8.0-windows/`.
-
-## Publish
-
-```powershell
-dotnet publish "NexusProgrammer.csproj" -c Release -r win-x64 --self-contained false
-```
-
-Copy any required WCH native DLLs next to the published EXE if they are not
-installed system-wide.
+You can download the latest release from the [GitHub releases page](https://github.com/mhqb365/NexusProgrammer/releases)
 
 ## License
 
-Application source code is licensed under the MIT License. See `LICENSE`.
+MIT License
 
 Parts of the CH34x SPI NOR catalog are generated from flashrom chip definitions and remain
 subject to the flashrom GPL-2.0-or-later license. See `THIRD_PARTY_NOTICES.md`
-and `flashrom-data/COPYING.rst`.
+and `flashrom-data/COPYING.rst`
+
+## Tiếng Việt
+
+[English](#english) | Tiếng Việt
+
+Nexus Programmer là ứng dụng Windows dành cho CH34x và XGecu T48
+Dự án tập trung vào chip SPI NOR flash. Ứng dụng có thể nhận dạng máy nạp, nhận dạng/tìm kiếm/chọn IC SPI NOR, đọc/ghi/xác minh buffer và xóa chip
+
+## Tính năng
+
+- Nhận dạng máy nạp CH341, CH347 và XGecu T48
+- Tìm kiếm catalog SPI NOR, khớp JEDEC ID, thêm IC mới nếu chưa có trong danh sách
+- Catalog SPI NOR tách riêng cho CH34x và XGecu T48
+- Xem trước/chỉnh sửa buffer dạng hex
+- Đọc, ghi, xác minh, xóa và chạy workflow script
+- Chế độ sáng/tối
+
+## Yêu cầu
+
+- Windows
+- .NET 8 SDK
+- Driver WCH CH341/CH347
+- Driver XGecu WinUSB để truy cập phần cứng T48. Cần cài phần mềm Xgpro trước để có driver
+
+## Tải về
+
+Bạn có thể tải bản phát hành mới nhất tại [trang GitHub releases](https://github.com/mhqb365/NexusProgrammer/releases)
+
+## Giấy phép
+
+MIT License
+
+Một phần catalog SPI NOR cho CH34x được tạo từ định nghĩa chip của flashrom và vẫn chịu giấy phép flashrom GPL-2.0-or-later. Xem `THIRD_PARTY_NOTICES.md` và `flashrom-data/COPYING.rst`

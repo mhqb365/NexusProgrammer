@@ -86,6 +86,7 @@ public static class IcCatalogLoader
                 rawId = knownId;
             }
 
+            var volts = FormatVolts(device, fields[5]);
             var profile = new ChipProfile(
                 device,
                 fields[6],
@@ -93,12 +94,12 @@ public static class IcCatalogLoader
                 pageSize,
                 fields[7],
                 string.IsNullOrWhiteSpace(fields[1]) ? "GENERIC" : fields[1].ToUpperInvariant(),
-                FormatVolts(fields[5]),
+                volts,
                 fields[8]);
 
             list.Add(new IcCandidate(
                 device,
-                FormatVolts(fields[5]),
+                volts,
                 FormatMbits(sizeBytes),
                 $"{pageSize} Bytes",
                 profile.Manufacturer,
@@ -136,8 +137,17 @@ public static class IcCatalogLoader
         return string.Join(" ", Enumerable.Range(0, hex.Length / 2).Select(i => hex.Substring(i * 2, 2)));
     }
 
-    private static string FormatVolts(string? volts) =>
-        string.IsNullOrWhiteSpace(volts) ? string.Empty : volts.EndsWith('V') ? volts : $"{volts}V";
+    private static string FormatVolts(string device, string? volts)
+    {
+        var normalizedDevice = device.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
+        if (normalizedDevice.Contains("1.8", StringComparison.OrdinalIgnoreCase) ||
+            normalizedDevice.Contains("1V8", StringComparison.OrdinalIgnoreCase))
+        {
+            return "1.8V";
+        }
+
+        return string.IsNullOrWhiteSpace(volts) ? string.Empty : volts.EndsWith('V') ? volts : $"{volts}V";
+    }
 
     private static string DeviceKey(string device)
     {

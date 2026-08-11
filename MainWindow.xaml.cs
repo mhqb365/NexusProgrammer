@@ -355,10 +355,31 @@ public partial class MainWindow : Window
     private Task DetectIcAsync(bool logLifecycle, bool autoApplySingle, bool openCatalogOnMiss) =>
         RunOperationAsync("Read ID", async progress =>
         {
-            var id = await _programmer.ReadIdAsync(CurrentChip(), progress);
+            var chip = CurrentChip();
+            AppendLog($"Detect request: selected {chip.Name}, voltage profile {chip.Volts}");
+            var id = await _programmer.ReadIdAsync(chip, progress);
             AppendLog($"IC ID: {BitConverter.ToString(id).Replace("-", " ")}");
             ShowChipSelectionForId(id, autoApplySingle, openCatalogOnMiss);
+            await RefreshT48DetectedVoltageProfileAsync(chip, id, progress);
         }, logLifecycle: logLifecycle);
+
+    private async Task RefreshT48DetectedVoltageProfileAsync(ChipProfile probeChip, byte[] detectedId, IProgress<int> progress)
+    {
+        if (_programmer is not T48SDKProgrammer)
+        {
+            return;
+        }
+
+        var detectedChip = CurrentChip();
+        if (detectedChip.Name == probeChip.Name || SameVoltageProfile(detectedChip, probeChip) || !CurrentChipMatchesId(detectedChip, detectedId))
+        {
+            return;
+        }
+
+        AppendLog($"Detected profile changed to {detectedChip.Name}, voltage profile {detectedChip.Volts}. Re-applying T48 voltage profile.");
+        var confirmedId = await _programmer.ReadIdAsync(detectedChip, progress);
+        AppendLog($"Confirmed IC ID with {detectedChip.Volts} profile: {BitConverter.ToString(confirmedId).Replace("-", " ")}");
+    }
 
     private bool HasProgrammer => _programmer is not MockProgrammer;
 
@@ -458,7 +479,7 @@ public partial class MainWindow : Window
         {
             var startAddress = ParseStartAddress();
             var skipBlankPages = SkipBlankPagesCheckBox.IsChecked == true;
-            AppendLog($"Write request: {FormatBytes(_buffer.Length)} to 0x{startAddress:X6}{(skipBlankPages ? " (skip FF pages)" : "")}");
+            AppendLog($"Write request: {FormatBytes(_buffer.Length)} to 0x{startAddress:X6}{(skipBlankPages ? " (skip FF pages)" : "")}, voltage profile {chip.Volts}");
             await UnprotectIfRequestedAsync(chip, progress);
             await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages);
         });
@@ -1698,6 +1719,11 @@ public partial class MainWindow : Window
 
     private bool ConfirmVoltageAdapterIfNeeded(ChipProfile chip, string operationName)
     {
+        if (_programmer is T48SDKProgrammer)
+        {
+            return true;
+        }
+
         if (!Requires1V8Adapter(chip))
         {
             return true;
@@ -1723,6 +1749,20 @@ public partial class MainWindow : Window
         var volts = chip.Volts.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
         return volts.Contains("1.8", StringComparison.OrdinalIgnoreCase) ||
                volts.Contains("1V8", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool SameVoltageProfile(ChipProfile left, ChipProfile right) =>
+        string.Equals(NormalizeVoltage(left.Volts), NormalizeVoltage(right.Volts), StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeVoltage(string volts) =>
+        volts.Replace(" ", "", StringComparison.OrdinalIgnoreCase).TrimEnd('V');
+
+    private bool CurrentChipMatchesId(ChipProfile chip, byte[] id)
+    {
+        var idText = FormatId(id);
+        return _icCatalog.Any(candidate =>
+            string.Equals(candidate.Profile.Name, chip.Name, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(candidate.JedecId, idText, StringComparison.OrdinalIgnoreCase));
     }
 
     private void ShowChipSelectionForId(byte[] id, bool autoApplySingle = false, bool openCatalogOnMiss = true)
@@ -1773,7 +1813,7 @@ public partial class MainWindow : Window
         {
             var candidate = candidates[0];
             ApplyChip(candidate.Profile);
-            AppendLog($"Auto-selected IC: {candidate.Device}, {candidate.Size}, page {candidate.Page}, {candidate.Manuf}");
+            AppendLog($"Auto-selected IC: {candidate.Device}, {candidate.Size}, {candidate.Volts}, page {candidate.Page}, {candidate.Manuf}");
             return;
         }
 
@@ -1825,7 +1865,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == true && dialog.SelectedCandidate is not null)
         {
             ApplyChip(dialog.SelectedCandidate.Profile);
-            AppendLog($"Selected IC: {dialog.SelectedCandidate.Device}, {dialog.SelectedCandidate.Size}, page {dialog.SelectedCandidate.Page}, {dialog.SelectedCandidate.Manuf}");
+            AppendLog($"Selected IC: {dialog.SelectedCandidate.Device}, {dialog.SelectedCandidate.Size}, {dialog.SelectedCandidate.Volts}, page {dialog.SelectedCandidate.Page}, {dialog.SelectedCandidate.Manuf}");
         }
     }
 

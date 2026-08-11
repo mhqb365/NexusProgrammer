@@ -37,7 +37,7 @@ public sealed class T48SDKProgrammer : IChipProgrammer
         using var device = T48UsbDevice.OpenFirst();
         var spi25 = new T48Spi25Client(device);
         progress.Report(50);
-        var id = ReadValidJedecId(spi25);
+        var id = ReadValidJedecId(spi25, Uses1V8Profile(chip));
         progress.Report(100);
         return new[] { id.ManufacturerId, id.MemoryType, id.CapacityCode };
     });
@@ -48,7 +48,7 @@ public sealed class T48SDKProgrammer : IChipProgrammer
         using var device = T48UsbDevice.OpenFirst();
         var spi25 = new T48Spi25Client(device);
         progress.Report(5);
-        var data = RunT48Operation(() => spi25.ReadFlash((uint)startAddress, length, ToSdkProgress(progress), UsesLargeFlashProfile(chip)));
+        var data = RunT48Operation(() => spi25.ReadFlash((uint)startAddress, length, ToSdkProgress(progress), UsesLargeFlashProfile(chip), Uses1V8Profile(chip)));
         if (data.Length != length)
         {
             throw new IOException($"XGecu T48 SDK returned {data.Length} byte(s), expected {length} byte(s).");
@@ -72,11 +72,11 @@ public sealed class T48SDKProgrammer : IChipProgrammer
         progress.Report(5);
         if (skipBlankPages)
         {
-            RunT48Operation(() => WriteNonBlankPages(spi25, (uint)startAddress, padded, progress, UsesLargeFlashProfile(chip)));
+            RunT48Operation(() => spi25.WriteFlashSparse((uint)startAddress, padded, ToSdkProgress(progress), UsesLargeFlashProfile(chip), Uses1V8Profile(chip)));
         }
         else
         {
-            RunT48Operation(() => spi25.WriteFlash((uint)startAddress, padded, ToSdkProgress(progress), UsesLargeFlashProfile(chip)));
+            RunT48Operation(() => spi25.WriteFlash((uint)startAddress, padded, ToSdkProgress(progress), UsesLargeFlashProfile(chip), Uses1V8Profile(chip)));
             progress.Report(100);
         }
     });
@@ -100,15 +100,15 @@ public sealed class T48SDKProgrammer : IChipProgrammer
         using var device = T48UsbDevice.OpenFirst();
         var spi25 = new T48Spi25Client(device);
         progress.Report(5);
-        RunT48Operation(() => spi25.EraseChip(ToSdkProgress(progress), EstimateEraseDuration(chip), UsesLargeFlashProfile(chip)));
+        RunT48Operation(() => spi25.EraseChip(ToSdkProgress(progress), EstimateEraseDuration(chip), UsesLargeFlashProfile(chip), Uses1V8Profile(chip)));
         progress.Report(100);
     });
 
-    private static T48Spi25DeviceId ReadValidJedecId(T48Spi25Client spi25)
+    private static T48Spi25DeviceId ReadValidJedecId(T48Spi25Client spi25, bool use1V8Profile)
     {
         try
         {
-            var id = spi25.ReadJedecId();
+            var id = spi25.ReadJedecId(use1V8Profile);
             if (IsPoorContactId(id))
             {
                 throw PoorContactException($"Invalid IC ID {id.ManufacturerId:X2} {id.MemoryType:X2} {id.CapacityCode:X2}");
@@ -165,32 +165,6 @@ public sealed class T48SDKProgrammer : IChipProgrammer
                message.Contains("erase response", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void WriteNonBlankPages(T48Spi25Client spi25, uint startAddress, byte[] data, IProgress<int> progress, bool useLargeFlashProfile)
-    {
-        var done = 0;
-        while (done < data.Length)
-        {
-            while (done < data.Length && IsBlank(data, done, Math.Min(WritePageSize, data.Length - done)))
-            {
-                done += WritePageSize;
-                progress.Report(data.Length == 0 ? 100 : Math.Min(100, done * 100 / data.Length));
-            }
-
-            var runStart = done;
-            while (done < data.Length && !IsBlank(data, done, Math.Min(WritePageSize, data.Length - done)))
-            {
-                done += WritePageSize;
-            }
-
-            if (done > runStart)
-            {
-                spi25.WriteFlash(startAddress + (uint)runStart, data.AsSpan(runStart, done - runStart), useLargeFlashProfile: useLargeFlashProfile);
-            }
-
-            progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
-        }
-    }
-
     private static byte[] PadForT48Write(byte[] data)
     {
         if (data.Length % WritePageSize == 0)
@@ -206,6 +180,11 @@ public sealed class T48SDKProgrammer : IChipProgrammer
     }
 
     private static bool UsesLargeFlashProfile(ChipProfile chip) => chip.SizeBytes > 0x1000000;
+
+    private static bool Uses1V8Profile(ChipProfile chip) =>
+        chip.Volts.Replace(" ", "", StringComparison.OrdinalIgnoreCase)
+            .Contains("1.8", StringComparison.OrdinalIgnoreCase) ||
+        chip.Volts.Contains("1V8", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsBlank(byte[] data, int offset, int count)
     {
