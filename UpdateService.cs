@@ -177,10 +177,8 @@ Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
     private static Version NormalizeVersion(Version version) =>
         new(Math.Max(version.Major, 0), Math.Max(version.Minor, 0), Math.Max(version.Build, 0), Math.Max(version.Revision, 0));
 
-    private static string FormatVersion(Version version) =>
-        version.Revision > 0
-            ? $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}"
-            : $"{version.Major}.{version.Minor}.{version.Build}";
+    public static string FormatVersion(Version version) =>
+        $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
 
     private static string EscapePowerShellString(string value) => value.Replace("'", "''");
 
@@ -214,9 +212,7 @@ internal sealed class UpdateCheckResult
     public Version? LatestVersion { get; }
     public string DisplayLatestVersion => LatestVersion is null
         ? string.Empty
-        : LatestVersion.Revision > 0
-            ? $"{LatestVersion.Major}.{LatestVersion.Minor}.{LatestVersion.Build}.{LatestVersion.Revision}"
-            : $"{LatestVersion.Major}.{LatestVersion.Minor}.{LatestVersion.Build}";
+        : UpdateService.FormatVersion(LatestVersion);
 
     public string DisplayChangeLog
     {

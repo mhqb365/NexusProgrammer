@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Media;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows;
@@ -1756,11 +1755,7 @@ public partial class MainWindow : Window
     }
 
     private static string AppVersion =>
-        Assembly.GetExecutingAssembly()
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion
-        ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)
-        ?? "0.0.0";
+        UpdateService.FormatVersion(UpdateService.CurrentVersion);
 
     private Task RunOperationAsync(string name, Func<IProgress<int>, Task> operation) =>
         RunOperationAsync(name, null, operation);
