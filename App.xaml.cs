@@ -8,13 +8,14 @@ public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
-        base.OnStartup(e);
         DispatcherUnhandledException += (_, args) =>
         {
             WriteCrashLog(args.Exception);
             MessageBox.Show(args.Exception.Message, "Nexus Programmer", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
+
+        base.OnStartup(e);
     }
 
     private static void WriteCrashLog(Exception ex)

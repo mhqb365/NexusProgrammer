@@ -2,3 +2,4 @@
 Device	Manufacturer	RawId	SizeBytes	PageSize	Volts	Protocol	CommandSet	Type	Supported
 XM25RH64C	XMC	204317	8388608	256	3.3	SPI	25xx	SPI_NOR	true
 QH128A	XMC	207018	16777216	256	3.3	SPI	25xx	SPI_NOR	true
+QH256BX	XMC	206019	33554432	256	3.3	SPI	25xx	SPI_NOR	true
