@@ -218,6 +218,21 @@ internal sealed class UpdateCheckResult
             ? $"{LatestVersion.Major}.{LatestVersion.Minor}.{LatestVersion.Build}.{LatestVersion.Revision}"
             : $"{LatestVersion.Major}.{LatestVersion.Minor}.{LatestVersion.Build}";
 
+    public string DisplayChangeLog
+    {
+        get
+        {
+            var body = Release?.Body?.Trim();
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return "No changelog provided.";
+            }
+
+            const int maxLength = 1200;
+            return body.Length <= maxLength ? body : $"{body[..maxLength].TrimEnd()}...";
+        }
+    }
+
     public static UpdateCheckResult NoRelease() => new(UpdateCheckStatus.NoRelease);
     public static UpdateCheckResult UnknownVersion(GitHubRelease? release) => new(UpdateCheckStatus.UnknownVersion, release);
     public static UpdateCheckResult UpToDate(GitHubRelease release, Version latestVersion) => new(UpdateCheckStatus.UpToDate, release, latestVersion);
@@ -243,6 +258,9 @@ internal sealed class GitHubRelease
 
     [DataMember(Name = "html_url")]
     public string? HtmlUrl { get; set; }
+
+    [DataMember(Name = "body")]
+    public string? Body { get; set; }
 
     [DataMember(Name = "assets")]
     public GitHubReleaseAsset[]? Assets { get; set; }

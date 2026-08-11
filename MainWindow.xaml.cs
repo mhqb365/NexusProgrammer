@@ -215,7 +215,7 @@ public partial class MainWindow : Window
 
             var updateNow = MessageBox.Show(
                 this,
-                $"A new version is available: {result.DisplayLatestVersion}\nCurrent version: {UpdateService.DisplayCurrentVersion}\n\nUpdate now?",
+                $"A new version is available: {result.DisplayLatestVersion}\nCurrent version: {UpdateService.DisplayCurrentVersion}\n\nChange log:\n{result.DisplayChangeLog}\n\nUpdate now?",
                 "Update available",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Information) == MessageBoxResult.Yes;
