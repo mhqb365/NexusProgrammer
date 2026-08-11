@@ -14,6 +14,7 @@ namespace NexusProgrammer;
 internal static class UpdateService
 {
     private const string LatestReleaseUrl = "https://api.github.com/repos/mhqb365/NexusProgrammer/releases/latest";
+    private const string PreferredExecutableName = "NexusProgrammer.exe";
 
     public static Version CurrentVersion => ParseVersion(
         Assembly.GetExecutingAssembly()
@@ -121,7 +122,14 @@ $temp = '{EscapePowerShellString(update.TempRoot)}'
 $pidToWait = {Process.GetCurrentProcess().Id}
 Wait-Process -Id $pidToWait -ErrorAction SilentlyContinue
 Copy-Item -Path (Join-Path $source '*') -Destination $target -Recurse -Force
-Start-Process -FilePath $exe -WorkingDirectory $target
+$preferredExe = Join-Path $target '{PreferredExecutableName}'
+if (Test-Path -LiteralPath $preferredExe) {{
+    $legacyExe = Join-Path $target 'Nexus Programmer.exe'
+    Remove-Item -LiteralPath $legacyExe -Force -ErrorAction SilentlyContinue
+    Start-Process -FilePath $preferredExe -WorkingDirectory $target
+}} else {{
+    Start-Process -FilePath $exe -WorkingDirectory $target
+}}
 Start-Sleep -Seconds 2
 Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
 ";

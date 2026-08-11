@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <AssemblyName>Nexus Programmer</AssemblyName>
+    <AssemblyName>NexusProgrammer</AssemblyName>
     <Product>Nexus Programmer</Product>
     <Authors>mhqb365.com</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
