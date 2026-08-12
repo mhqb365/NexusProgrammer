@@ -582,8 +582,11 @@
                     LastChildFill="True" Margin="0,0,0,1">
                             <TextBlock DockPanel.Dock="Left" Text="Hex Editor" FontWeight="SemiBold"
                                 Margin="10,0,10,0" VerticalAlignment="Center" />
+                            <Button x:Name="ClearMeButton" DockPanel.Dock="Right"
+                                Width="70" Height="20" Margin="2,4,8,4" Padding="0"
+                                ToolTip="Clear Intel ME region" Click="ClearMe_Click">Clear ME</Button>
                             <Button x:Name="WindowsKeySearchButton" DockPanel.Dock="Right"
-                                Width="62" Height="20" Margin="2,4,8,4" Padding="0"
+                                Width="62" Height="20" Margin="2,4,2,4" Padding="0"
                                 ToolTip="Find Windows key marker" Click="WindowsKeySearch_Click">Win
                                 Key</Button>
                             <Button x:Name="HexSearchNextButton" DockPanel.Dock="Right" Width="24"

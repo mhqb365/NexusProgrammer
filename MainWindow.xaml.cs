@@ -674,7 +674,17 @@ public partial class MainWindow : Window
             SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
             RebuildRows();
             UpdateStatus();
+            await AnalyzeCurrentBufferWithMeaAsync();
         });
+    }
+
+    private async Task AnalyzeCurrentBufferWithMeaAsync()
+    {
+        AppendLog("MEA analysis started");
+        var result = await MeaAnalyzer.AnalyzeAsync(_buffer);
+        AppendLog(result.Success
+            ? $"MEA analysis success{Environment.NewLine}{result.Summary}"
+            : $"MEA analysis failed: {result.Summary}");
     }
 
     private async void WriteChip_Click(object sender, RoutedEventArgs e)
@@ -721,6 +731,20 @@ public partial class MainWindow : Window
             AppendLog(ok ? "Verify OK" : "Verify failed");
         });
     }
+
+    private void ClearMe_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ClearMeWindow(GetMemoryTabOptions())
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
+    }
+
+    private IEnumerable<string> GetMemoryTabOptions() =>
+        _memoryTabs.Values
+            .OrderBy(tab => tab.Index)
+            .Select(tab => MemoryTabLabel(tab.Index));
 
     private async void Erase_Click(object sender, RoutedEventArgs e)
     {
@@ -1649,7 +1673,7 @@ public partial class MainWindow : Window
         Application.Current.Resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
     }
 
-    private void LoadFile_Click(object sender, RoutedEventArgs e)
+    private async void LoadFile_Click(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -1662,7 +1686,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            LoadBufferFromFile(dialog.FileName);
+            await LoadBufferFromFileAsync(dialog.FileName);
         }
         catch (Exception ex)
         {
@@ -1679,7 +1703,7 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void HexEditor_Drop(object sender, DragEventArgs e)
+    private async void HexEditor_Drop(object sender, DragEventArgs e)
     {
         try
         {
@@ -1695,7 +1719,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            LoadBufferFromFile(file);
+            await LoadBufferFromFileAsync(file);
             if (files.Length > 1)
             {
                 AppendLog($"Drop loaded first file; ignored {files.Length - 1} other file(s)");
@@ -1707,7 +1731,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void LoadBufferFromFile(string fileName)
+    private async Task LoadBufferFromFileAsync(string fileName)
     {
         SetActiveBuffer(StripXgproMetadata(File.ReadAllBytes(fileName), out var markerOffset, out var removedBytes));
         _currentOffset = 0;
@@ -1719,6 +1743,8 @@ public partial class MainWindow : Window
         {
             AppendLog($"Removed XGecu metadata: {removedBytes} bytes from 0x{markerOffset:X6} to EOF");
         }
+
+        await AnalyzeCurrentBufferWithMeaAsync();
     }
 
     private void SaveFile_Click(object sender, RoutedEventArgs e)

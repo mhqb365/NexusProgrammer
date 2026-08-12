@@ -28,6 +28,8 @@
       CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Catalog\XGecuT48_SPI_NOR.tsv" Link="T48ICCatalog.tsv"
       CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="MEA\**\*"
+      CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
