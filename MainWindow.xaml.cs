@@ -9,6 +9,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 using System.Windows.Media;
 
@@ -142,13 +143,13 @@ public partial class MainWindow : Window
 
         if (selectedTab == AddMemoryTab)
         {
-            AddBiosTab();
+            MemoryTabControl.SelectedItem = _activeMemoryTab?.Tab ?? Bios1Tab;
             return;
         }
 
-        if (ActivateMemoryTab(selectedTab) && IsLoaded)
+        if (ActivateMemoryTab(selectedTab) && IsLoaded && _activeMemoryTab is not null)
         {
-            AppendLog($"Selected {selectedTab.Header}");
+            AppendLog($"Selected {MemoryTabLabel(_activeMemoryTab.Index)}");
         }
     }
 
@@ -157,15 +158,107 @@ public partial class MainWindow : Window
         var index = _nextBiosTabIndex++;
         var tab = new TabItem
         {
-            Header = $"Memory {index}",
             Tag = index
         };
+        tab.Header = CreateClosableMemoryTabHeader(index, tab);
         _memoryTabs[tab] = CreateMemoryTabState(index, tab);
 
         MemoryTabControl.Items.Insert(Math.Max(0, MemoryTabControl.Items.Count - 1), tab);
         MemoryTabControl.SelectedItem = tab;
         return tab;
     }
+
+    private void AddMemoryTab_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        AddBiosTab();
+    }
+
+    private StackPanel CreateClosableMemoryTabHeader(int index, TabItem tab)
+    {
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Horizontal
+        };
+        header.Children.Add(new TextBlock
+        {
+            Text = MemoryTabLabel(index),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var closeButton = new TextBlock
+        {
+            Width = 18,
+            Height = 18,
+            Margin = new Thickness(6, 0, 0, 0),
+            Text = "x",
+            TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = $"Close {MemoryTabLabel(index)}",
+            Tag = tab
+        };
+        closeButton.PreviewMouseLeftButtonDown += CloseMemoryTab_MouseDown;
+        header.Children.Add(closeButton);
+        return header;
+    }
+
+    private void CloseMemoryTab_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not TextBlock { Tag: TabItem tab })
+        {
+            return;
+        }
+
+        if (tab is null || tab == Bios1Tab)
+        {
+            return;
+        }
+
+        CloseMemoryTab(tab);
+    }
+
+    private void CloseMemoryTab(TabItem tab)
+    {
+        var tabIndex = MemoryTabControl.Items.IndexOf(tab);
+        if (tab == Bios1Tab || tabIndex < 0)
+        {
+            return;
+        }
+
+        var closedLabel = _memoryTabs.TryGetValue(tab, out var closingState)
+            ? MemoryTabLabel(closingState.Index)
+            : "Memory";
+        var countBefore = MemoryTabControl.Items.Count;
+        var closingActiveTab = _activeMemoryTab?.Tab == tab;
+
+        _memoryTabs.Remove(tab);
+        tab.Content = null;
+        tab.Header = null;
+        MemoryTabControl.Items.RemoveAt(tabIndex);
+
+        if (closingActiveTab)
+        {
+            var lastMemoryIndex = Math.Max(0, MemoryTabControl.Items.Count - 2);
+            var nextIndex = Math.Clamp(tabIndex, 0, lastMemoryIndex);
+            MemoryTabControl.SelectedIndex = nextIndex;
+            if (MemoryTabControl.SelectedItem is TabItem selectedTab)
+            {
+                ActivateMemoryTab(selectedTab);
+            }
+        }
+
+        if (MemoryTabControl.Items.Count < countBefore)
+        {
+            if (_memoryTabs.Count == 1)
+            {
+                _nextBiosTabIndex = 2;
+            }
+
+            AppendLog($"Closed {closedLabel}");
+        }
+    }
+
+    private static string MemoryTabLabel(int index) => $"Memory {index}";
 
     private MemoryTabState CreateMemoryTabState(int index, TabItem tab)
     {
@@ -2096,7 +2189,7 @@ internal sealed class MemoryTabState
         Buffer = buffer;
     }
 
-    public int Index { get; }
+    public int Index { get; set; }
     public TabItem Tab { get; }
     public HexEditorView Editor { get; }
     public ScrollBar ScrollBar { get; }

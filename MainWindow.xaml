@@ -652,7 +652,8 @@
                                 Minimum="0" ValueChanged="HexScrollBar_ValueChanged" />
                         </Grid>
                     </TabItem>
-                    <TabItem x:Name="AddMemoryTab" Header="+" ToolTip="Add Memory tab" />
+                    <TabItem x:Name="AddMemoryTab" Header="+" ToolTip="Add Memory tab"
+                        PreviewMouseLeftButtonDown="AddMemoryTab_MouseDown" />
                 </TabControl>
             </Grid>
 
