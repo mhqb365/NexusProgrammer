@@ -271,7 +271,8 @@
     </Window.Resources>
 
     <DockPanel>
-        <Menu x:Name="MainMenu" DockPanel.Dock="Top" Background="{DynamicResource AppBackgroundBrush}"
+        <Menu x:Name="MainMenu" DockPanel.Dock="Top"
+            Background="{DynamicResource AppBackgroundBrush}"
             Foreground="{DynamicResource TextBrush}">
             <MenuItem x:Name="FileMenu" Header="_File">
                 <MenuItem x:Name="NewMenuItem" Header="New" Click="FillFF_Click" />
@@ -283,8 +284,8 @@
             </MenuItem>
             <MenuItem x:Name="IcMenu" Header="_IC">
                 <MenuItem x:Name="SearchIcMenuItem" Header="Search" Click="SearchIc_Click" />
-                <MenuItem x:Name="AddIcMenuItem" Header="Add IC" Click="AddIc_Click" />
                 <MenuItem x:Name="ReadIdMenuItem" Header="Detect" Click="ReadId_Click" />
+                <MenuItem x:Name="AddIcMenuItem" Header="Add" Click="AddIc_Click" />
                 <Separator />
                 <MenuItem x:Name="ReadChipMenuItem" Header="Read" Click="ReadChip_Click" />
                 <MenuItem x:Name="WriteChipMenuItem" Header="Write" Click="WriteChip_Click" />
