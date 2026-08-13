@@ -501,8 +501,7 @@
                         Margin="10,0,10,0" VerticalAlignment="Center" />
                     <Button x:Name="ClearMeButton" DockPanel.Dock="Right"
                         Width="70" Height="20" Margin="2,4,8,4" Padding="0"
-                        Visibility="Collapsed" ToolTip="Clear Intel ME region"
-                        Click="ClearMe_Click">Clear ME</Button>
+                        ToolTip="Clear Intel ME region" Click="ClearMe_Click">Clear ME</Button>
                     <Button x:Name="WindowsKeySearchButton" DockPanel.Dock="Right"
                         Width="62" Height="20" Margin="2,4,2,4" Padding="0"
                         ToolTip="Find Windows key marker" Click="WindowsKeySearch_Click">Win

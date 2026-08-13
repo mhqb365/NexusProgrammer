@@ -23,7 +23,7 @@
     <Resource Include="icon.ico" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(EnableMea)' == 'true'">
+  <ItemGroup>
     <Content Include="MEA\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

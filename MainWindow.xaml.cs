@@ -22,7 +22,7 @@ public partial class MainWindow : Window
     private const int MaxHexPreviewRows = 4096;
     private const int BytesPerHexRow = 16;
     private const int SearchHitContextBytes = 16;
-    private static readonly bool MeaFeatureEnabled = false;
+    private static readonly bool MeaFeatureEnabled = true;
     private static readonly byte[] XgproMetadataMarker =
     [
         0x2D, 0x43, 0x6F, 0x6E, 0x66, 0x69, 0x67, 0x75,
