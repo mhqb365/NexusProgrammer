@@ -5,10 +5,14 @@ namespace NexusProgrammer;
 
 public partial class ClearMeWindow : Window
 {
-    public ClearMeWindow(IEnumerable<string> memoryTabs)
+    private readonly Func<MemoryBufferOption, string, string, Task> _clearSingleBios;
+
+    public ClearMeWindow(IEnumerable<MemoryBufferOption> memoryTabs, Func<MemoryBufferOption, string, string, Task> clearSingleBios)
     {
         InitializeComponent();
+        _clearSingleBios = clearSingleBios;
         MemoryCombo.ItemsSource = memoryTabs.ToList();
+        MemoryCombo.DisplayMemberPath = nameof(MemoryBufferOption.Label);
         MemoryCombo.SelectedIndex = MemoryCombo.Items.Count > 0 ? 0 : -1;
     }
 
@@ -46,4 +50,38 @@ public partial class ClearMeWindow : Window
 
         comboBox.SelectedItem = dialog.FileName;
     }
+
+    private async void ClearMe_Click(object sender, RoutedEventArgs e)
+    {
+        if (MemoryCombo.SelectedItem is not MemoryBufferOption memory)
+        {
+            MessageBox.Show(this, "Select a Memory tab first.", "Clear ME", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var meRegion = MeRegionCombo.Text.Trim();
+        var fit = FitCombo.Text.Trim();
+        if (string.IsNullOrWhiteSpace(meRegion) || string.IsNullOrWhiteSpace(fit))
+        {
+            MessageBox.Show(this, "Select ME Region and FIT first.", "Clear ME", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        ClearMeButton.IsEnabled = false;
+        try
+        {
+            await _clearSingleBios(memory, meRegion, fit);
+            Close();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Clear ME", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            ClearMeButton.IsEnabled = true;
+        }
+    }
 }
+
+public sealed record MemoryBufferOption(string Label, byte[] Buffer);

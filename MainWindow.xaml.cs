@@ -22,8 +22,7 @@ public partial class MainWindow : Window
     private const int MaxHexPreviewRows = 4096;
     private const int BytesPerHexRow = 16;
     private const int SearchHitContextBytes = 16;
-    private const string MoonIconPath = "M12 3a6 6 0 0 0 9 9a9 9 0 1 1-9-9";
-    private const string SunIconPath = "M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8 M12 2v2 M12 20v2 M4.93 4.93l1.41 1.41 M17.66 17.66l1.41 1.41 M2 12h2 M20 12h2 M4.93 19.07l1.41-1.41 M17.66 6.34l1.41-1.41";
+    private static readonly bool MeaFeatureEnabled = false;
     private static readonly byte[] XgproMetadataMarker =
     [
         0x2D, 0x43, 0x6F, 0x6E, 0x66, 0x69, 0x67, 0x75,
@@ -571,7 +570,7 @@ public partial class MainWindow : Window
         RunOperationAsync("Read ID", async progress =>
         {
             var chip = CurrentChip();
-            AppendLog($"Detect request: selected {chip.Name}, voltage profile {chip.Volts}");
+            AppendLog($"Detect request: reading JEDEC ID with {chip.Volts} probe profile");
             var id = await _programmer.ReadIdAsync(chip, progress);
             AppendLog($"IC ID: {BitConverter.ToString(id).Replace("-", " ")}");
             ShowChipSelectionForId(id, autoApplySingle, openCatalogOnMiss);
@@ -667,6 +666,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        var readCompleted = false;
         await RunOperationAsync("Read chip", _buffer.Length, async progress =>
         {
             var startAddress = ParseStartAddress();
@@ -674,17 +674,35 @@ public partial class MainWindow : Window
             SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
             RebuildRows();
             UpdateStatus();
-            await AnalyzeCurrentBufferWithMeaAsync();
+            readCompleted = true;
         });
+        if (readCompleted)
+        {
+            SaveCurrentBufferWithDialog();
+            await AnalyzeCurrentBufferWithMeaAsync();
+        }
     }
 
     private async Task AnalyzeCurrentBufferWithMeaAsync()
     {
+        if (!MeaFeatureEnabled)
+        {
+            return;
+        }
+
+        if (!MeaAnalyzer.IsLikelyIntelFirmware(_buffer))
+        {
+            AppendLog("MEA analysis skipped: non-Intel ROM");
+            return;
+        }
+
         AppendLog("MEA analysis started");
+        var stopwatch = Stopwatch.StartNew();
         var result = await MeaAnalyzer.AnalyzeAsync(_buffer);
+        stopwatch.Stop();
         AppendLog(result.Success
-            ? $"MEA analysis success{Environment.NewLine}{result.Summary}"
-            : $"MEA analysis failed: {result.Summary}");
+            ? $"MEA analysis success in {FormatDuration(stopwatch.Elapsed)}{Environment.NewLine}{result.Summary}"
+            : $"MEA analysis failed in {FormatDuration(stopwatch.Elapsed)}: {result.Summary}");
     }
 
     private async void WriteChip_Click(object sender, RoutedEventArgs e)
@@ -734,17 +752,34 @@ public partial class MainWindow : Window
 
     private void ClearMe_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new ClearMeWindow(GetMemoryTabOptions())
+        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync)
         {
             Owner = this
         };
         dialog.ShowDialog();
     }
 
-    private IEnumerable<string> GetMemoryTabOptions() =>
+    private IEnumerable<MemoryBufferOption> GetMemoryTabOptions() =>
         _memoryTabs.Values
             .OrderBy(tab => tab.Index)
-            .Select(tab => MemoryTabLabel(tab.Index));
+            .Select(tab => new MemoryBufferOption(MemoryTabLabel(tab.Index), tab.Buffer.ToArray()));
+
+    private async Task ClearSingleBiosAsync(MemoryBufferOption memory, string meRegionPath, string fitPath)
+    {
+        await RunDialogOperationAsync("Clear ME", memory.Buffer.Length, async _ =>
+        {
+            AppendLog($"Clear ME request: {memory.Label}");
+            var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPath, fitPath);
+            var tab = AddBiosTab();
+            MemoryTabControl.SelectedItem = tab;
+            SetActiveBuffer(result.Bios);
+            RebuildRows();
+            UpdateStatus();
+            AppendLog($"Clear ME completed: {memory.Label} -> {MemoryTabLabel(_activeMemoryTab?.Index ?? 0)}");
+            AppendLog(result.Summary);
+            await AnalyzeCurrentBufferWithMeaAsync();
+        });
+    }
 
     private async void Erase_Click(object sender, RoutedEventArgs e)
     {
@@ -759,12 +794,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (MessageBox.Show("Erase selected IC?", "Confirm erase", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        if (MessageBox.Show(this, $"Erase {chip.Name}?", "Confirm erase", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
         {
             return;
         }
 
-        await RunOperationAsync("Erase chip", chip.SizeBytes, async progress =>
+        await RunOperationAsync("Erase chip", null, async progress =>
         {
             await UnprotectIfRequestedAsync(chip, progress);
             await _programmer.EraseAsync(chip, progress);
@@ -1597,82 +1632,6 @@ public partial class MainWindow : Window
         return int.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out offset);
     }
 
-    private void ThemeToggleButton_Toggled(object sender, RoutedEventArgs e)
-    {
-        ApplyTheme(ThemeToggleButton.IsChecked == true);
-    }
-
-    private void ApplyTheme(bool darkMode)
-    {
-        ThemeIconPath.Data = Geometry.Parse(darkMode ? SunIconPath : MoonIconPath);
-        ThemeToggleButton.ToolTip = darkMode ? "Switch to light mode" : "Switch to dark mode";
-
-        if (darkMode)
-        {
-            SetBrush("AppBackgroundBrush", "#202225");
-            SetBrush("PanelBackgroundBrush", "#25282C");
-            SetBrush("ToolbarBackgroundBrush", "#2D3035");
-            SetBrush("ToolbarButtonBackgroundBrush", "#2D3035");
-            SetBrush("ToolbarButtonBorderBrush", "#2D3035");
-            SetBrush("SurfaceBackgroundBrush", "#1F2226");
-            SetBrush("SubtleBackgroundBrush", "#272B30");
-            SetBrush("InputBackgroundBrush", "#2C3137");
-            SetBrush("ReadOnlyBackgroundBrush", "#293036");
-            SetBrush("HoverBackgroundBrush", "#353C44");
-            SetBrush("PressedBackgroundBrush", "#3D4650");
-            SetBrush("AccentBrush", "#69BDFD");
-            SetBrush("AccentSoftBrush", "#19384F");
-            SetBrush("AlternateRowBackgroundBrush", "#24282D");
-            SetBrush("TextBrush", "#E7ECF2");
-            SetBrush("MutedTextBrush", "#B8C1CC");
-            SetBrush("BorderBrush", "#48515C");
-            SetBrush("GridLineBrush", "#313740");
-            SetBrush("LightGridLineBrush", "#2A3038");
-            SetBrush("AddressBackgroundBrush", "#283A49");
-            SetBrush("AddressForegroundBrush", "#6BCBFF");
-            SetBrush("SplitterBrush", "#3A424C");
-            SetBrush("SelectionBackgroundBrush", "#315B7C");
-            SetBrush("SelectionForegroundBrush", "#FFFFFF");
-            SetBrush("ProgressTrackBrush", "#30363D");
-            SetBrush("StopBackgroundBrush", "#4A2328");
-            SetBrush("StopForegroundBrush", "#FFB9C0");
-            return;
-        }
-
-        SetBrush("AppBackgroundBrush", "#F0F0F0");
-        SetBrush("PanelBackgroundBrush", "#EFEFEF");
-        SetBrush("ToolbarBackgroundBrush", "#E8E8E8");
-        SetBrush("ToolbarButtonBackgroundBrush", "#E8E8E8");
-        SetBrush("ToolbarButtonBorderBrush", "#E8E8E8");
-        SetBrush("SurfaceBackgroundBrush", "#FFFFFF");
-        SetBrush("SubtleBackgroundBrush", "#F6F6F6");
-        SetBrush("InputBackgroundBrush", "#F7F7F7");
-        SetBrush("ReadOnlyBackgroundBrush", "#F7F7F7");
-        SetBrush("HoverBackgroundBrush", "#E9F3FF");
-        SetBrush("PressedBackgroundBrush", "#DDEEFF");
-        SetBrush("AccentBrush", "#0067C0");
-        SetBrush("AccentSoftBrush", "#E5F1FB");
-        SetBrush("AlternateRowBackgroundBrush", "#FBFBFB");
-        SetBrush("TextBrush", "#000000");
-        SetBrush("MutedTextBrush", "#333333");
-        SetBrush("BorderBrush", "#B8B8B8");
-        SetBrush("GridLineBrush", "#E6E6E6");
-        SetBrush("LightGridLineBrush", "#F6F6F6");
-        SetBrush("AddressBackgroundBrush", "#A8A8A8");
-        SetBrush("AddressForegroundBrush", "#FFFFFF");
-        SetBrush("SplitterBrush", "#D8D8D8");
-        SetBrush("SelectionBackgroundBrush", "#DDEEFF");
-        SetBrush("SelectionForegroundBrush", "#000000");
-        SetBrush("ProgressTrackBrush", "#E5E5E5");
-        SetBrush("StopBackgroundBrush", "#FFF0F0");
-        SetBrush("StopForegroundBrush", "#B00000");
-    }
-
-    private static void SetBrush(string key, string color)
-    {
-        Application.Current.Resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
-    }
-
     private async void LoadFile_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -1749,6 +1708,11 @@ public partial class MainWindow : Window
 
     private void SaveFile_Click(object sender, RoutedEventArgs e)
     {
+        SaveCurrentBufferWithDialog();
+    }
+
+    private void SaveCurrentBufferWithDialog()
+    {
         var dialog = new SaveFileDialog
         {
             Filter = "Binary files (*.bin)|*.bin|ROM files (*.rom)|*.rom|All files (*.*)|*.*",
@@ -1818,37 +1782,72 @@ public partial class MainWindow : Window
             return;
         }
 
-        await RunOperationAsync(script, _buffer.Length, async progress =>
+        var isReadVerifyScript = string.Equals(script, "Read + verify", StringComparison.OrdinalIgnoreCase);
+        if (!isReadVerifyScript &&
+            MessageBox.Show(
+                this,
+                $"Erase {chip.Name}, then write and verify {FormatBytes(_buffer.Length)}?",
+                "Confirm erase + write",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var analyzeAfterScript = false;
+        await RunOperationAsync(script, null, async progress =>
         {
             var startAddress = ParseStartAddress();
-            if (string.Equals(script, "Read + verify", StringComparison.OrdinalIgnoreCase))
+            if (isReadVerifyScript)
             {
                 AppendLog($"Script request: read and verify {FormatBytes(_buffer.Length)} from 0x{startAddress:X6}");
                 AppendLog("Script stage: read started");
+                var stageWatch = Stopwatch.StartNew();
                 SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
+                stageWatch.Stop();
                 RebuildRows();
                 UpdateStatus();
-                AppendLog("Script stage: read completed");
+                AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(stageWatch.Elapsed)} ({FormatSpeed(_buffer.Length, stageWatch.Elapsed)})");
                 AppendLog("Script stage: verify started");
+                stageWatch.Restart();
                 var readOk = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
-                AppendLog(readOk ? "Script stage: verify completed OK" : "Script stage: verify failed");
+                stageWatch.Stop();
+                AppendLog(readOk
+                    ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(stageWatch.Elapsed)} ({FormatSpeed(_buffer.Length, stageWatch.Elapsed)})"
+                    : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(stageWatch.Elapsed)} ({FormatSpeed(_buffer.Length, stageWatch.Elapsed)})");
                 AppendLog(readOk ? "Script completed: read + verify OK" : "Script completed: read + verify failed");
+                analyzeAfterScript = true;
                 return;
             }
 
+            var skipBlankPages = SkipBlankPagesCheckBox.IsChecked == true;
             AppendLog($"Script request: erase, write and verify {FormatBytes(_buffer.Length)} at 0x{startAddress:X6}");
             await UnprotectIfRequestedAsync(chip, progress);
             AppendLog("Script stage: erase started");
+            var eraseWriteVerifyWatch = Stopwatch.StartNew();
             await _programmer.EraseAsync(chip, progress);
-            AppendLog("Script stage: erase completed");
+            eraseWriteVerifyWatch.Stop();
+            AppendLog($"Script stage: erase completed in {FormatDuration(eraseWriteVerifyWatch.Elapsed)}");
+            await UnprotectIfRequestedAsync(chip, progress);
             AppendLog("Script stage: write started");
-            await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages: true);
-            AppendLog("Script stage: write completed");
+            eraseWriteVerifyWatch.Restart();
+            await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages);
+            eraseWriteVerifyWatch.Stop();
+            AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(eraseWriteVerifyWatch.Elapsed)} ({FormatSpeed(_buffer.Length, eraseWriteVerifyWatch.Elapsed)})");
             AppendLog("Script stage: verify started");
+            eraseWriteVerifyWatch.Restart();
             var ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
-            AppendLog(ok ? "Script stage: verify completed OK" : "Script stage: verify failed");
+            eraseWriteVerifyWatch.Stop();
+            AppendLog(ok
+                ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(eraseWriteVerifyWatch.Elapsed)} ({FormatSpeed(_buffer.Length, eraseWriteVerifyWatch.Elapsed)})"
+                : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(eraseWriteVerifyWatch.Elapsed)} ({FormatSpeed(_buffer.Length, eraseWriteVerifyWatch.Elapsed)})");
             AppendLog(ok ? "Script completed: verify OK" : "Script completed: verify failed");
         });
+        if (analyzeAfterScript)
+        {
+            SaveCurrentBufferWithDialog();
+            await AnalyzeCurrentBufferWithMeaAsync();
+        }
     }
 
     private async Task UnprotectIfRequestedAsync(ChipProfile chip, IProgress<int> progress)
@@ -1881,6 +1880,43 @@ public partial class MainWindow : Window
 
     private Task RunOperationAsync(string name, Func<IProgress<int>, Task> operation, bool logLifecycle) =>
         RunOperationAsync(name, null, operation, logLifecycle);
+
+    private async Task RunDialogOperationAsync(string name, int? byteCount, Func<IProgress<int>, Task> operation)
+    {
+        if (_isBusy)
+        {
+            throw new InvalidOperationException("Another operation is already running.");
+        }
+
+        _isBusy = true;
+        OperationStatusText.Text = name;
+        OperationProgress.Value = 0;
+        var progress = new Progress<int>(value => OperationProgress.Value = Math.Clamp(value, 0, 100));
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            await operation(progress);
+            stopwatch.Stop();
+            OperationProgress.Value = 100;
+            OperationStatusText.Text = "Ready";
+            AppendLog(byteCount is > 0
+                ? $"{name} completed: {FormatBytes(byteCount.Value)} in {FormatDuration(stopwatch.Elapsed)} ({FormatSpeed(byteCount.Value, stopwatch.Elapsed)})"
+                : $"{name} completed in {FormatDuration(stopwatch.Elapsed)}");
+            PlayOperationSound(name, success: true);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            OperationStatusText.Text = "Error";
+            AppendLog($"ERROR after {FormatDuration(stopwatch.Elapsed)}: {ex.Message}");
+            PlayOperationSound(name, success: false);
+            throw;
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
 
     private async Task RunOperationAsync(string name, int? byteCount, Func<IProgress<int>, Task> operation, bool logLifecycle = true)
     {
@@ -2044,7 +2080,7 @@ public partial class MainWindow : Window
 
         AppendLog(candidates.Count == 1
             ? $"Detected ID: {idText}. One compatible IC profile found"
-            : $"Detected ID: {idText}. Multiple compatible IC profiles found. Please select the exact chip marking");
+            : $"Detected ID: {idText}. Multiple compatible IC profiles found");
 
         if (autoApplySingle && candidates.Count == 1)
         {
@@ -2185,9 +2221,17 @@ public partial class MainWindow : Window
 
     private static string FormatDuration(TimeSpan elapsed)
     {
-        return elapsed.TotalHours >= 1
-            ? elapsed.ToString(@"hh\:mm\:ss\.fff")
-            : elapsed.ToString(@"mm\:ss\.fff");
+        if (elapsed.TotalHours >= 1)
+        {
+            return $"{(int)elapsed.TotalHours}h {elapsed.Minutes:D2}m {elapsed.Seconds:D2}.{elapsed.Milliseconds / 100}s";
+        }
+
+        if (elapsed.TotalMinutes >= 1)
+        {
+            return $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds:D2}.{elapsed.Milliseconds / 100}s";
+        }
+
+        return $"{elapsed.TotalSeconds:0.0}s";
     }
 
     private static string FormatSpeed(int bytes, TimeSpan elapsed)

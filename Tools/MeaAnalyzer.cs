@@ -8,6 +8,14 @@ namespace NexusProgrammer;
 internal static partial class MeaAnalyzer
 {
     private static readonly string MeaDirectory = Path.Combine(AppContext.BaseDirectory, "MEA");
+    private static readonly byte[] IntelFlashDescriptorSignature = [0x5A, 0xA5, 0xF0, 0x0F];
+    private static readonly byte[][] IntelFirmwareMarkers =
+    [
+        Encoding.ASCII.GetBytes("$FPT"),
+        Encoding.ASCII.GetBytes("IFWI"),
+        Encoding.ASCII.GetBytes("CSME"),
+        Encoding.ASCII.GetBytes("Intel(R) ME")
+    ];
 
     public static async Task<MeaAnalysisResult> AnalyzeAsync(byte[] buffer, CancellationToken cancellationToken = default)
     {
@@ -34,6 +42,26 @@ internal static partial class MeaAnalyzer
         {
             TryDeleteDirectory(tempRoot);
         }
+    }
+
+    public static bool IsLikelyIntelFirmware(byte[] buffer)
+    {
+        if (buffer.Length >= 0x14 && buffer.AsSpan(0x10, 4).SequenceEqual(IntelFlashDescriptorSignature))
+        {
+            return true;
+        }
+
+        var searchLength = Math.Min(buffer.Length, 0x200000);
+        var searchArea = buffer.AsSpan(0, searchLength);
+        foreach (var marker in IntelFirmwareMarkers)
+        {
+            if (searchArea.IndexOf(marker) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string? FindMeaExecutable()

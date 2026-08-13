@@ -8,7 +8,7 @@
     <Authors>mhqb365.com</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/mhqb365/NexusProgrammer</RepositoryUrl>
-    <Version>1.1.3</Version>
+    <Version>1.1.3.1</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
@@ -23,14 +23,14 @@
     <Resource Include="icon.ico" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="Catalog\CH34x_SPI_NOR.tsv" Link="IntegratedICCatalog.tsv"
-      CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Catalog\XGecuT48_SPI_NOR.tsv" Link="T48ICCatalog.tsv"
-      CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="MEA\**\*"
-      CopyToOutputDirectory="PreserveNewest" />
+  <ItemGroup Condition="'$(EnableMea)' == 'true'">
+    <Content Include="MEA\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <Target Name="BuildIcCatalog" AfterTargets="Build">
+    <Exec
+      Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\BuildCatalog.ps1&quot; -OutputPath &quot;$(TargetDir)ICCatalog.tsv&quot; -InputPath &quot;$(MSBuildProjectDirectory)\Catalog\CH34x_SPI_NOR.tsv;$(MSBuildProjectDirectory)\Catalog\XGecuT48_SPI_NOR.tsv;$(MSBuildProjectDirectory)\Catalog\User_SPI_NOR.tsv&quot;" />
+  </Target>
 
   <ItemGroup>
     <Compile Remove="T48\**\*.cs" />
@@ -39,6 +39,10 @@
 
   <ItemGroup>
     <ProjectReference Include="XGecuT48SDK\src\T48SDK\T48SDK.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MahApps.Metro.IconPacks.Lucide" Version="6.2.1" />
   </ItemGroup>
 
 </Project>

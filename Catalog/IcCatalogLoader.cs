@@ -4,20 +4,39 @@ namespace NexusProgrammer;
 
 public static class IcCatalogLoader
 {
+    private const string CatalogFileName = "ICCatalog.tsv";
+    private const string UserCatalogFileName = "User_SPI_NOR.tsv";
     private static readonly CatalogSource[] CatalogFiles =
     [
-        new("IntegratedICCatalog.tsv", Path.Combine("Catalog", "CH34x_SPI_NOR.tsv")),
-        new("T48ICCatalog.tsv", Path.Combine("Catalog", "XGecuT48_SPI_NOR.tsv")),
-        new("User_SPI_NOR.tsv", Path.Combine("Catalog", "User_SPI_NOR.tsv"))
+        new(Path.Combine("Catalog", "CH34x_SPI_NOR.tsv")),
+        new(Path.Combine("Catalog", "XGecuT48_SPI_NOR.tsv")),
+        new(Path.Combine("Catalog", "User_SPI_NOR.tsv"))
     ];
 
     public static List<IcCandidate> LoadSpiCatalog()
     {
         var list = new List<IcCandidate>();
-        var knownIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var builtCatalog = Path.Combine(AppContext.BaseDirectory, CatalogFileName);
+        if (File.Exists(builtCatalog))
+        {
+            AddTsvCatalog(list, seen, builtCatalog);
+            var userCatalog = Path.Combine(AppContext.BaseDirectory, UserCatalogFileName);
+            if (File.Exists(userCatalog))
+            {
+                AddTsvCatalog(list, seen, userCatalog);
+            }
+
+            return list;
+        }
+
         foreach (var source in CatalogFiles)
         {
-            AddTsvCatalog(list, knownIds, source);
+            var catalogPath = FindSourceCatalogFile(source);
+            if (catalogPath is not null)
+            {
+                AddTsvCatalog(list, seen, catalogPath);
+            }
         }
 
         return list;
@@ -25,11 +44,7 @@ public static class IcCatalogLoader
 
     public static void SaveUserCandidate(IcCandidate candidate)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Catalog", "User_SPI_NOR.tsv");
-        if (!Directory.Exists(Path.GetDirectoryName(path)))
-        {
-            path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Catalog", "User_SPI_NOR.tsv");
-        }
+        var path = Path.Combine(AppContext.BaseDirectory, UserCatalogFileName);
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var writeHeader = !File.Exists(path) || new FileInfo(path).Length == 0;
@@ -53,14 +68,8 @@ public static class IcCatalogLoader
             "true"));
     }
 
-    private static void AddTsvCatalog(List<IcCandidate> list, Dictionary<string, string> knownIds, CatalogSource source)
+    private static void AddTsvCatalog(List<IcCandidate> list, HashSet<string> seen, string catalogPath)
     {
-        var catalogPath = FindCatalogFile(source);
-        if (catalogPath is null)
-        {
-            return;
-        }
-
         foreach (var line in File.ReadLines(catalogPath))
         {
             if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#') || line.StartsWith("Device\t"))
@@ -81,9 +90,15 @@ public static class IcCatalogLoader
 
             var device = fields[0];
             var rawId = FormatRawId(fields[2]);
-            if (string.IsNullOrWhiteSpace(rawId) && knownIds.TryGetValue(DeviceKey(device), out var knownId))
+            if (string.IsNullOrWhiteSpace(rawId))
             {
-                rawId = knownId;
+                continue;
+            }
+
+            var candidateKey = string.Join('|', DeviceKey(device), rawId, sizeBytes, fields[5], fields[8]);
+            if (!seen.Add(candidateKey))
+            {
+                continue;
             }
 
             var volts = FormatVolts(device, fields[5]);
@@ -107,22 +122,12 @@ public static class IcCatalogLoader
                 profile,
                 rawId));
 
-            if (!string.IsNullOrWhiteSpace(rawId))
-            {
-                knownIds.TryAdd(DeviceKey(device), rawId);
-            }
         }
     }
 
-    private static string? FindCatalogFile(CatalogSource source)
+    private static string? FindSourceCatalogFile(CatalogSource source)
     {
-        var catalogPath = Path.Combine(AppContext.BaseDirectory, source.OutputFileName);
-        if (File.Exists(catalogPath))
-        {
-            return catalogPath;
-        }
-
-        catalogPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", source.SourcePath);
+        var catalogPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", source.SourcePath);
         return File.Exists(catalogPath) ? catalogPath : null;
     }
 
@@ -175,5 +180,5 @@ public static class IcCatalogLoader
             : $"{bits / 1024:0.#} Kbits";
     }
 
-    private sealed record CatalogSource(string OutputFileName, string SourcePath);
+    private sealed record CatalogSource(string SourcePath);
 }

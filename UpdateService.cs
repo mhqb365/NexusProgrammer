@@ -120,8 +120,16 @@ $target = '{EscapePowerShellString(appDirectory)}'
 $exe = '{EscapePowerShellString(appExe)}'
 $temp = '{EscapePowerShellString(update.TempRoot)}'
 $pidToWait = {Process.GetCurrentProcess().Id}
+$userCatalog = Join-Path $target 'User_SPI_NOR.tsv'
+$userCatalogBackup = Join-Path $temp 'User_SPI_NOR.tsv.bak'
 Wait-Process -Id $pidToWait -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $userCatalog) {{
+    Copy-Item -LiteralPath $userCatalog -Destination $userCatalogBackup -Force
+}}
 Copy-Item -Path (Join-Path $source '*') -Destination $target -Recurse -Force
+if (Test-Path -LiteralPath $userCatalogBackup) {{
+    Copy-Item -LiteralPath $userCatalogBackup -Destination $userCatalog -Force
+}}
 $preferredExe = Join-Path $target '{PreferredExecutableName}'
 if (Test-Path -LiteralPath $preferredExe) {{
     $legacyExe = Join-Path $target 'Nexus Programmer.exe'
