@@ -187,6 +187,21 @@ public partial class MainWindow : Window
         return tab;
     }
 
+    private TabItem AddMemoryTabWithBuffer(byte[] buffer, string sourceFileName)
+    {
+        var tab = AddBiosTab();
+        MemoryTabControl.SelectedItem = tab;
+        SetActiveBuffer(buffer);
+        if (_activeMemoryTab is not null)
+        {
+            _activeMemoryTab.SourceFileName = sourceFileName;
+        }
+
+        RebuildRows();
+        UpdateStatus();
+        return tab;
+    }
+
     private void AddMemoryTab_MouseDown(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
@@ -710,7 +725,6 @@ public partial class MainWindow : Window
         if (readCompleted)
         {
             SaveCurrentBufferWithDialog();
-            await AnalyzeCurrentBufferWithMeaAsync();
         }
     }
 
@@ -723,7 +737,7 @@ public partial class MainWindow : Window
 
         if (!MeaAnalyzer.IsLikelyIntelFirmware(_buffer))
         {
-            AppendLog("MEA analysis skipped: non-Intel image");
+            AppendLog("MEA analysis skipped: maybe wrong layout or non-Intel image");
             return;
         }
 
@@ -788,25 +802,60 @@ public partial class MainWindow : Window
 
     private void ClearMe_Click(object sender, RoutedEventArgs e)
     {
-        var candidates = new ClearMeCandidates([], []);
-        var analysis = _activeMemoryTab?.MeaAnalysis;
-        var hasValidAnalysis = analysis?.Success == true;
-        if (analysis?.Success == true)
-        {
-            candidates = ClearMeCandidateFinder.Find(_settings, analysis.Info);
-            AppendLog($"Clear ME target: version {analysis.Info.Version}, SKU {analysis.Info.Sku}, FIT {analysis.Info.Fit}");
-            AppendLog($"Clear ME candidates: {candidates.MeRegions.Count} ME Region, {candidates.FitTools.Count} FIT");
-        }
-        else if (MeaAnalyzer.IsLikelyIntelFirmware(_buffer))
-        {
-            AppendLog("Clear ME candidates skipped: run MEA analysis by reading or opening this BIOS first");
-        }
-
-        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync, _settings, candidates, hasValidAnalysis)
+        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync, ClearDualBiosAsync, AnalyzeClearMeBiosAsync, _settings, new ClearMeCandidates([], []))
         {
             Owner = this
         };
         dialog.ShowDialog();
+    }
+
+    private async Task<ClearMeCandidates> AnalyzeClearMeBiosAsync(IReadOnlyList<MemoryBufferOption> memories)
+    {
+        if (memories.Count == 0)
+        {
+            return new ClearMeCandidates([], []);
+        }
+
+        var buffer = memories.Count == 1
+            ? memories[0].Buffer
+            : MergeMemoryBuffers(memories);
+        if (!MeaAnalyzer.IsLikelyIntelFirmware(buffer))
+        {
+            AppendLog("Clear ME analyze skipped: maybe wrong layout or non-Intel image");
+            return new ClearMeCandidates([], []);
+        }
+
+        AppendLog(memories.Count == 1
+            ? $"Clear ME analyze started: {memories[0].Label}"
+            : $"Clear ME analyze started: {string.Join(" + ", memories.Select(memory => memory.Label))}");
+        var stopwatch = Stopwatch.StartNew();
+        var analysis = await MeaAnalyzer.AnalyzeAsync(buffer);
+        stopwatch.Stop();
+        if (!analysis.Success)
+        {
+            AppendLog($"Clear ME analyze failed in {FormatDuration(stopwatch.Elapsed)}: {analysis.Summary}");
+            return new ClearMeCandidates([], []);
+        }
+
+        AppendLog($"Clear ME analyze success in {FormatDuration(stopwatch.Elapsed)}{Environment.NewLine}{analysis.Summary}");
+        AppendLog($"Clear ME target: version {analysis.Info.Version}, SKU {analysis.Info.Sku}, FIT {analysis.Info.Fit}");
+        var candidates = ClearMeCandidateFinder.Find(_settings, analysis.Info);
+        AppendLog($"Clear ME candidates: {candidates.MeRegions.Count} ME Region, {candidates.FitTools.Count} FIT");
+        return candidates;
+    }
+
+    private static byte[] MergeMemoryBuffers(IEnumerable<MemoryBufferOption> memories)
+    {
+        var list = memories.ToList();
+        var merged = new byte[list.Sum(memory => memory.Buffer.Length)];
+        var offset = 0;
+        foreach (var memory in list)
+        {
+            Buffer.BlockCopy(memory.Buffer, 0, merged, offset, memory.Buffer.Length);
+            offset += memory.Buffer.Length;
+        }
+
+        return merged;
     }
 
     private IEnumerable<MemoryBufferOption> GetMemoryTabOptions() =>
@@ -836,10 +885,45 @@ public partial class MainWindow : Window
             AppendLog(result.Summary);
             AppendLog($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
             var suggestedFileName = ClearMeFileNameFor(memory);
-            var postClearOperation = Dispatcher.BeginInvoke(new Action(async () =>
+            var postClearOperation = Dispatcher.BeginInvoke(new Action(() =>
             {
                 SaveCurrentBufferWithDialog(suggestedFileName);
-                await AnalyzeCurrentBufferWithMeaAsync();
+            }));
+        }, logCompletion: false);
+    }
+
+    private async Task ClearDualBiosAsync(MemoryBufferOption memory1, MemoryBufferOption memory2, string meRegionPath, string fitPath)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        await RunDialogOperationAsync("Clear ME", null, async _ =>
+        {
+            AppendLog($"Clear ME dual request: {memory1.Label} + {memory2.Label}");
+            var merged = new byte[memory1.Buffer.Length + memory2.Buffer.Length];
+            Buffer.BlockCopy(memory1.Buffer, 0, merged, 0, memory1.Buffer.Length);
+            Buffer.BlockCopy(memory2.Buffer, 0, merged, memory1.Buffer.Length, memory2.Buffer.Length);
+            var result = await ClearMeSingleBiosService.ClearAsync(merged, meRegionPath, fitPath);
+            stopwatch.Stop();
+            if (result.Bios.Length <= memory1.Buffer.Length)
+            {
+                throw new InvalidOperationException($"Cleared merged image is too small: {FormatBytes(result.Bios.Length)}.");
+            }
+
+            var first = result.Bios.Take(memory1.Buffer.Length).ToArray();
+            var second = result.Bios.Skip(memory1.Buffer.Length).ToArray();
+            var tab1 = AddMemoryTabWithBuffer(first, ClearMeFileNameFor(memory1));
+            var tab2 = AddMemoryTabWithBuffer(second, ClearMeFileNameFor(memory2));
+            MemoryTabControl.SelectedItem = tab1;
+            AppendLog($"Clear ME dual build completed: {memory1.Label} + {memory2.Label} -> {MemoryTabLabel(_memoryTabs[tab1].Index)} + {MemoryTabLabel(_memoryTabs[tab2].Index)} in {FormatDuration(stopwatch.Elapsed)}");
+            AppendLog(result.Summary);
+            AppendLog($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
+            var fileName1 = ClearMeFileNameFor(memory1);
+            var fileName2 = ClearMeFileNameFor(memory2);
+            var postClearOperation = Dispatcher.BeginInvoke(new Action(() =>
+            {
+                MemoryTabControl.SelectedItem = tab1;
+                SaveCurrentBufferWithDialog(fileName1);
+                MemoryTabControl.SelectedItem = tab2;
+                SaveCurrentBufferWithDialog(fileName2);
             }));
         }, logCompletion: false);
     }
@@ -1788,7 +1872,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task LoadBufferFromFileAsync(string fileName)
+    private Task LoadBufferFromFileAsync(string fileName)
     {
         var originalBytes = File.ReadAllBytes(fileName);
         var buffer = TrimBiosMetadata(originalBytes, out var trimReason, out var removedBytes);
@@ -1808,7 +1892,7 @@ public partial class MainWindow : Window
             AppendLog($"Input file have {trimReason}. Trimmed {FormatBytes(removedBytes)}: {FormatBytes(originalBytes.Length)} -> {FormatBytes(_buffer.Length)}");
         }
 
-        await AnalyzeCurrentBufferWithMeaAsync();
+        return Task.CompletedTask;
     }
 
     private void SaveFile_Click(object sender, RoutedEventArgs e)
@@ -1951,7 +2035,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var analyzeAfterScript = false;
+        var saveAfterScript = false;
         await RunOperationAsync(script, null, async progress =>
         {
             var startAddress = ParseStartAddress();
@@ -1973,7 +2057,7 @@ public partial class MainWindow : Window
                     ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(stageWatch.Elapsed)} ({FormatSpeed(_buffer.Length, stageWatch.Elapsed)})"
                     : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(stageWatch.Elapsed)} ({FormatSpeed(_buffer.Length, stageWatch.Elapsed)})");
                 AppendLog(readOk ? "Script completed: read + verify OK" : "Script completed: read + verify failed");
-                analyzeAfterScript = true;
+                saveAfterScript = true;
                 return;
             }
 
@@ -2000,10 +2084,9 @@ public partial class MainWindow : Window
                 : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(eraseWriteVerifyWatch.Elapsed)} ({FormatSpeed(_buffer.Length, eraseWriteVerifyWatch.Elapsed)})");
             AppendLog(ok ? "Script completed: verify OK" : "Script completed: verify failed");
         });
-        if (analyzeAfterScript)
+        if (saveAfterScript)
         {
             SaveCurrentBufferWithDialog();
-            await AnalyzeCurrentBufferWithMeaAsync();
         }
     }
 

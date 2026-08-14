@@ -1,13 +1,13 @@
 <Window x:Class="NexusProgrammer.ClearMeWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Clear ME" Width="620" Height="260"
+    Title="Clear ME" Width="620" Height="250"
     WindowStartupLocation="CenterOwner"
     ResizeMode="NoResize"
     Background="{DynamicResource AppBackgroundBrush}"
     Foreground="{DynamicResource TextBrush}">
     <Grid Margin="10">
-        <TabControl>
+        <TabControl x:Name="ClearMeTabs" SelectionChanged="ClearMeTabs_SelectionChanged">
             <TabItem Header="Single BIOS">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
@@ -43,15 +43,63 @@
                     <Button Grid.Row="2" Grid.Column="2" Height="24" Margin="0,0,0,6"
                         Click="BrowseFit_Click">Browse...</Button>
 
-                    <Button x:Name="ClearMeButton" Grid.Row="3" Grid.Column="2"
-                        Height="26" Margin="0,8,0,0" Click="ClearMe_Click">Clear ME</Button>
+                    <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                        Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                        <Button x:Name="AnalyzeSingleButton" Width="86" Height="26"
+                            Margin="0,0,8,0" Click="AnalyzeSingle_Click">Analyze BIOS</Button>
+                        <Button x:Name="ClearMeButton" Width="76" Height="26"
+                            Click="ClearMe_Click">Clear ME</Button>
+                    </StackPanel>
                 </Grid>
             </TabItem>
             <TabItem Header="Dual BIOS">
-                <Grid>
-                    <TextBlock Text="Dual BIOS support will be added later."
-                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Foreground="{DynamicResource MutedTextBrush}" />
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="72" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="86" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="30" />
+                        <RowDefinition Height="30" />
+                        <RowDefinition Height="30" />
+                        <RowDefinition Height="30" />
+                        <RowDefinition Height="40" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="BIOS 1"
+                        VerticalAlignment="Center" />
+                    <ComboBox x:Name="DualMemory1Combo" Grid.Row="0" Grid.Column="1"
+                        Height="24" Margin="0,0,8,6" />
+                    <Button x:Name="ClearDualMemoryButton" Grid.Row="0" Grid.Column="2"
+                        Height="24" Margin="0,0,0,6" Click="ClearDualMemory_Click">X</Button>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="BIOS 2"
+                        VerticalAlignment="Center" />
+                    <ComboBox x:Name="DualMemory2Combo" Grid.Row="1" Grid.Column="1"
+                        Height="24" Margin="0,0,8,6" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="ME Region"
+                        VerticalAlignment="Center" />
+                    <ComboBox x:Name="DualMeRegionCombo" Grid.Row="2" Grid.Column="1"
+                        Height="24" Margin="0,0,8,6" />
+                    <Button Grid.Row="2" Grid.Column="2" Height="24" Margin="0,0,0,6"
+                        Click="BrowseDualMeRegion_Click">Browse...</Button>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="FIT"
+                        VerticalAlignment="Center" />
+                    <ComboBox x:Name="DualFitCombo" Grid.Row="3" Grid.Column="1"
+                        Height="24" Margin="0,0,8,6" />
+                    <Button Grid.Row="3" Grid.Column="2" Height="24" Margin="0,0,0,6"
+                        Click="BrowseDualFit_Click">Browse...</Button>
+
+                    <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
+                        Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                        <Button x:Name="AnalyzeDualButton" Width="86" Height="26"
+                            Margin="0,0,8,0" Click="AnalyzeDual_Click">Analyze BIOS</Button>
+                        <Button x:Name="ClearDualMeButton" Width="76" Height="26"
+                            Click="ClearDualMe_Click">Clear ME</Button>
+                    </StackPanel>
                 </Grid>
             </TabItem>
         </TabControl>
