@@ -4,10 +4,21 @@ namespace NexusProgrammer;
 
 public partial class AddIcWindow : Window
 {
-    public AddIcWindow(string? jedecId = null)
+    public AddIcWindow(string? jedecId = null, IcCandidate? candidate = null)
     {
         InitializeComponent();
-        if (!string.IsNullOrWhiteSpace(jedecId))
+        if (candidate is not null)
+        {
+            Title = "Edit IC";
+            SaveButton.Content = "Save";
+            DeviceBox.Text = candidate.Device;
+            ManufacturerBox.Text = candidate.Manuf;
+            JedecBox.Text = candidate.JedecId;
+            CapacityBox.Text = FormatCapacity(candidate.Profile.SizeBytes);
+            PageBox.Text = candidate.Profile.PageSize.ToString();
+            VoltsBox.Text = candidate.Volts.TrimEnd('V');
+        }
+        else if (!string.IsNullOrWhiteSpace(jedecId))
         {
             JedecBox.Text = jedecId;
         }
@@ -126,5 +137,12 @@ public partial class AddIcWindow : Window
 
         sizeBytes = (int)Math.Round(bytes);
         return sizeBytes > 0;
+    }
+
+    private static string FormatCapacity(int sizeBytes)
+    {
+        return sizeBytes % (1024 * 1024) == 0
+            ? $"{sizeBytes / (1024 * 1024)}MB"
+            : IcCatalogLoader.FormatMbits(sizeBytes);
     }
 }

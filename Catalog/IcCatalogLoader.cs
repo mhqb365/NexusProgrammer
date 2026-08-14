@@ -20,11 +20,11 @@ public static class IcCatalogLoader
         var builtCatalog = Path.Combine(AppContext.BaseDirectory, CatalogFileName);
         if (File.Exists(builtCatalog))
         {
-            AddTsvCatalog(list, seen, builtCatalog);
+            AddTsvCatalog(list, seen, builtCatalog, isUserCatalog: false);
             var userCatalog = Path.Combine(AppContext.BaseDirectory, UserCatalogFileName);
             if (File.Exists(userCatalog))
             {
-                AddTsvCatalog(list, seen, userCatalog);
+                AddTsvCatalog(list, seen, userCatalog, isUserCatalog: true);
             }
 
             return list;
@@ -35,7 +35,7 @@ public static class IcCatalogLoader
             var catalogPath = FindSourceCatalogFile(source);
             if (catalogPath is not null)
             {
-                AddTsvCatalog(list, seen, catalogPath);
+                AddTsvCatalog(list, seen, catalogPath, IsUserCatalog(source.SourcePath));
             }
         }
 
@@ -68,7 +68,31 @@ public static class IcCatalogLoader
             "true"));
     }
 
-    private static void AddTsvCatalog(List<IcCandidate> list, HashSet<string> seen, string catalogPath)
+    public static void SaveUserCatalog(IEnumerable<IcCandidate> candidates)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, UserCatalogFileName);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var writer = new StreamWriter(path, append: false);
+        writer.WriteLine("# User-added SPI NOR catalog");
+        writer.WriteLine("Device\tManufacturer\tRawId\tSizeBytes\tPageSize\tVolts\tProtocol\tCommandSet\tType\tSupported");
+        foreach (var candidate in candidates)
+        {
+            writer.WriteLine(string.Join('\t',
+                candidate.Device,
+                candidate.Manuf,
+                candidate.JedecId.Replace(" ", string.Empty, StringComparison.Ordinal),
+                candidate.Profile.SizeBytes,
+                candidate.Profile.PageSize,
+                candidate.Volts.TrimEnd('V'),
+                candidate.Profile.Protocol,
+                candidate.Profile.CommandSet,
+                candidate.Type,
+                "true"));
+        }
+    }
+
+    private static void AddTsvCatalog(List<IcCandidate> list, HashSet<string> seen, string catalogPath, bool isUserCatalog)
     {
         foreach (var line in File.ReadLines(catalogPath))
         {
@@ -120,7 +144,8 @@ public static class IcCatalogLoader
                 profile.Manufacturer,
                 fields[8],
                 profile,
-                rawId));
+                rawId,
+                isUserCatalog));
 
         }
     }
@@ -130,6 +155,9 @@ public static class IcCatalogLoader
         var catalogPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", source.SourcePath);
         return File.Exists(catalogPath) ? catalogPath : null;
     }
+
+    private static bool IsUserCatalog(string path) =>
+        Path.GetFileName(path).Equals(UserCatalogFileName, StringComparison.OrdinalIgnoreCase);
 
     private static string FormatRawId(string? id)
     {

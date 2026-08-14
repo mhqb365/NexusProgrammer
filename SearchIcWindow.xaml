@@ -96,6 +96,7 @@
             HorizontalGridLinesBrush="{DynamicResource GridLineBrush}"
             VerticalGridLinesBrush="{DynamicResource LightGridLineBrush}"
             BorderBrush="{DynamicResource SplitterBrush}"
+            SelectionChanged="IcGrid_SelectionChanged"
             MouseDoubleClick="IcGrid_MouseDoubleClick">
             <DataGrid.Resources>
                 <Style TargetType="{x:Type DataGridCell}">
@@ -147,6 +148,10 @@
             <Button Content="Select" Width="72" Height="30" Click="Select_Click" />
             <Button Content="Add IC" Width="72" Height="30" Margin="8,0,0,0"
                 Click="AddSpiNor_Click" />
+            <Button x:Name="EditIcButton" Content="Edit" Width="72" Height="30" Margin="8,0,0,0"
+                Click="EditIc_Click" />
+            <Button x:Name="DeleteIcButton" Content="Delete" Width="72" Height="30" Margin="8,0,0,0"
+                Click="DeleteIc_Click" />
         </StackPanel>
     </Grid>
 </Window>

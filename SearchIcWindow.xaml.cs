@@ -26,13 +26,19 @@ public partial class SearchIcWindow : Window
         {
             IcGrid.SelectedIndex = 0;
         }
+
+        UpdateUserActionButtons();
     }
 
     public IcCandidate? SelectedCandidate { get; private set; }
 
+    public bool CatalogChanged { get; private set; }
+
     private void FilterBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) => RefreshFilter();
 
     private void IcGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e) => SelectCurrent();
+
+    private void IcGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) => UpdateUserActionButtons();
 
     private void Select_Click(object sender, RoutedEventArgs e) => SelectCurrent();
 
@@ -48,11 +54,77 @@ public partial class SearchIcWindow : Window
         }
 
         IcCatalogLoader.SaveUserCandidate(dialog.Candidate);
+        CatalogChanged = true;
         _allCandidates = IcCatalogLoader.LoadSpiCatalog();
         FilterBox.Text = dialog.Candidate.Device;
         RefreshFilter();
         IcGrid.SelectedItem = _visibleCandidates.FirstOrDefault(candidate =>
             candidate.Device.Equals(dialog.Candidate.Device, StringComparison.OrdinalIgnoreCase));
+        UpdateUserActionButtons();
+    }
+
+    private void EditIc_Click(object sender, RoutedEventArgs e)
+    {
+        if (IcGrid.SelectedItem is not IcCandidate candidate || !candidate.IsUserAdded)
+        {
+            return;
+        }
+
+        var dialog = new AddIcWindow(candidate.JedecId, candidate)
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true || dialog.Candidate is null)
+        {
+            return;
+        }
+
+        var userCandidates = _allCandidates
+            .Where(item => item.IsUserAdded && !ReferenceEquals(item, candidate))
+            .Append(dialog.Candidate)
+            .ToList();
+        IcCatalogLoader.SaveUserCatalog(userCandidates);
+        CatalogChanged = true;
+        _allCandidates = IcCatalogLoader.LoadSpiCatalog();
+        FilterBox.Text = dialog.Candidate.Device;
+        RefreshFilter();
+        IcGrid.SelectedItem = _visibleCandidates.FirstOrDefault(item =>
+            item.IsUserAdded &&
+            item.Device.Equals(dialog.Candidate.Device, StringComparison.OrdinalIgnoreCase) &&
+            item.JedecId.Equals(dialog.Candidate.JedecId, StringComparison.OrdinalIgnoreCase));
+        UpdateUserActionButtons();
+    }
+
+    private void DeleteIc_Click(object sender, RoutedEventArgs e)
+    {
+        if (IcGrid.SelectedItem is not IcCandidate candidate || !candidate.IsUserAdded)
+        {
+            return;
+        }
+
+        if (MessageBox.Show(
+                this,
+                $"Delete user IC {candidate.Device}?",
+                "Delete IC",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var userCandidates = _allCandidates
+            .Where(item => item.IsUserAdded && !ReferenceEquals(item, candidate))
+            .ToList();
+        IcCatalogLoader.SaveUserCatalog(userCandidates);
+        CatalogChanged = true;
+        _allCandidates = IcCatalogLoader.LoadSpiCatalog();
+        RefreshFilter();
+        if (_visibleCandidates.Count > 0)
+        {
+            IcGrid.SelectedIndex = 0;
+        }
+
+        UpdateUserActionButtons();
     }
 
     private string? TryGetJedecFilter()
@@ -86,6 +158,14 @@ public partial class SearchIcWindow : Window
         }
 
         FoundText.Text = $"Found: {_visibleCandidates.Count} Chips";
+        UpdateUserActionButtons();
+    }
+
+    private void UpdateUserActionButtons()
+    {
+        var isUserAdded = IcGrid.SelectedItem is IcCandidate candidate && candidate.IsUserAdded;
+        EditIcButton.IsEnabled = isUserAdded;
+        DeleteIcButton.IsEnabled = isUserAdded;
     }
 
     private static bool Matches(IcCandidate candidate, string[] terms)

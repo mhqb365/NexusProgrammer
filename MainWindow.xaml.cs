@@ -689,13 +689,26 @@ public partial class MainWindow : Window
 
     private void ReloadIcCatalog()
     {
+        var selectedName = (ChipCombo.SelectedItem as ChipProfile)?.Name;
         _icCatalog = IcCatalogLoader.LoadSpiCatalog();
+        _chips.Clear();
         foreach (var profile in _icCatalog.Select(x => x.Profile))
         {
             if (!_chips.Any(x => x.Name.Equals(profile.Name, StringComparison.OrdinalIgnoreCase)))
             {
                 _chips.Add(profile);
             }
+        }
+
+        ChipCombo.Items.Refresh();
+        var selected = _chips.FirstOrDefault(chip => chip.Name.Equals(selectedName, StringComparison.OrdinalIgnoreCase));
+        if (selected is not null)
+        {
+            ChipCombo.SelectedItem = selected;
+        }
+        else if (_chips.Count > 0 && ChipCombo.SelectedIndex < 0)
+        {
+            ChipCombo.SelectedIndex = 0;
         }
     }
 
@@ -2396,10 +2409,16 @@ public partial class MainWindow : Window
             Title = title
         };
 
-        if (dialog.ShowDialog() == true && dialog.SelectedCandidate is not null)
+        var selected = dialog.ShowDialog() == true ? dialog.SelectedCandidate : null;
+        if (dialog.CatalogChanged)
         {
-            ApplyChip(dialog.SelectedCandidate.Profile);
-            AppendLog($"Selected IC: {dialog.SelectedCandidate.Device}, {dialog.SelectedCandidate.Size}, {dialog.SelectedCandidate.Volts}, page {dialog.SelectedCandidate.Page}, {dialog.SelectedCandidate.Manuf}");
+            ReloadIcCatalog();
+        }
+
+        if (selected is not null)
+        {
+            ApplyChip(selected.Profile);
+            AppendLog($"Selected IC: {selected.Device}, {selected.Size}, {selected.Volts}, page {selected.Page}, {selected.Manuf}");
         }
     }
 

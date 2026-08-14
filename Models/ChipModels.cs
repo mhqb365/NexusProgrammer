@@ -18,7 +18,8 @@ public sealed record IcCandidate(
     string Manuf,
     string Type,
     ChipProfile Profile,
-    string JedecId);
+    string JedecId,
+    bool IsUserAdded = false);
 
 public sealed record SizeOption(string Label, int Bytes);
 
