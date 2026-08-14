@@ -7,6 +7,7 @@ public sealed class AppSettings
 {
     public string MeRegionRoot { get; set; } = string.Empty;
     public string FitRoot { get; set; } = string.Empty;
+    public bool SoundEnabled { get; set; } = true;
 }
 
 internal static class AppSettingsService

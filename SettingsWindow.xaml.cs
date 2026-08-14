@@ -5,13 +5,15 @@ namespace NexusProgrammer;
 
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow()
+    public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
-        var settings = AppSettingsService.Load();
         MeRegionRootBox.Text = settings.MeRegionRoot;
         FitRootBox.Text = settings.FitRoot;
+        SoundEnabledCheckBox.IsChecked = settings.SoundEnabled;
     }
+
+    public AppSettings Settings { get; private set; } = new();
 
     private void BrowseMeRegionRoot_Click(object sender, RoutedEventArgs e)
     {
@@ -43,11 +45,13 @@ public partial class SettingsWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        AppSettingsService.Save(new AppSettings
+        Settings = new AppSettings
         {
             MeRegionRoot = MeRegionRootBox.Text.Trim(),
-            FitRoot = FitRootBox.Text.Trim()
-        });
+            FitRoot = FitRootBox.Text.Trim(),
+            SoundEnabled = SoundEnabledCheckBox.IsChecked == true
+        };
+        AppSettingsService.Save(Settings);
         DialogResult = true;
         Close();
     }

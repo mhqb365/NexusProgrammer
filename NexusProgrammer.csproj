@@ -21,6 +21,7 @@
   <ItemGroup>
     <None Remove="icon.ico" />
     <Resource Include="icon.ico" />
+    <Content Include="success.wav" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target Name="CopyMeaTools" AfterTargets="Build">

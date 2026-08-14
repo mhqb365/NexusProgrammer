@@ -19,6 +19,7 @@ public partial class MainWindow : Window
 {
     private const string AppName = "Nexus Programmer";
     private const string ProjectUrl = "https://github.com/mhqb365/NexusProgrammer";
+    private static readonly string SuccessSoundPath = Path.Combine(AppContext.BaseDirectory, "success.wav");
     private const int MaxHexPreviewRows = 4096;
     private const int BytesPerHexRow = 16;
     private const int SearchHitContextBytes = 16;
@@ -53,6 +54,7 @@ public partial class MainWindow : Window
 
     private List<IcCandidate> _icCatalog = [];
     private readonly DispatcherTimer _programmerMonitorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private AppSettings _settings = AppSettingsService.Load();
     private IChipProgrammer _programmer = new MockProgrammer();
     private string _activeProgrammerKey = "none";
     private byte[] _buffer = [];
@@ -597,6 +599,11 @@ public partial class MainWindow : Window
             AppendLog($"Detect request: reading JEDEC ID with {chip.Volts} probe profile");
             var id = await _programmer.ReadIdAsync(chip, progress);
             AppendLog($"IC ID: {BitConverter.ToString(id).Replace("-", " ")}");
+            if (id.Length > 0 && !IsInvalidJedecId(id))
+            {
+                PlayOperationSound("Detect IC", success: true);
+            }
+
             ShowChipSelectionForId(id, autoApplySingle, openCatalogOnMiss);
             await RefreshT48DetectedVoltageProfileAsync(chip, id, progress);
         }, logLifecycle: logLifecycle);
@@ -781,13 +788,12 @@ public partial class MainWindow : Window
 
     private void ClearMe_Click(object sender, RoutedEventArgs e)
     {
-        var settings = AppSettingsService.Load();
         var candidates = new ClearMeCandidates([], []);
         var analysis = _activeMemoryTab?.MeaAnalysis;
         var hasValidAnalysis = analysis?.Success == true;
         if (analysis?.Success == true)
         {
-            candidates = ClearMeCandidateFinder.Find(settings, analysis.Info);
+            candidates = ClearMeCandidateFinder.Find(_settings, analysis.Info);
             AppendLog($"Clear ME target: version {analysis.Info.Version}, SKU {analysis.Info.Sku}, FIT {analysis.Info.Fit}");
             AppendLog($"Clear ME candidates: {candidates.MeRegions.Count} ME Region, {candidates.FitTools.Count} FIT");
         }
@@ -796,7 +802,7 @@ public partial class MainWindow : Window
             AppendLog("Clear ME candidates skipped: run MEA analysis by reading or opening this BIOS first");
         }
 
-        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync, settings, candidates, hasValidAnalysis)
+        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync, _settings, candidates, hasValidAnalysis)
         {
             Owner = this
         };
@@ -2025,11 +2031,14 @@ public partial class MainWindow : Window
 
     private void Setting_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SettingsWindow
+        var dialog = new SettingsWindow(_settings)
         {
             Owner = this
         };
-        dialog.ShowDialog();
+        if (dialog.ShowDialog() == true)
+        {
+            _settings = dialog.Settings;
+        }
     }
 
     private static string AppVersion =>
@@ -2128,15 +2137,27 @@ public partial class MainWindow : Window
         }
     }
 
-    private static void PlayOperationSound(string operationName, bool success)
+    private void PlayOperationSound(string operationName, bool success)
     {
-        if (!ShouldPlayCompletionSound(operationName))
+        if (!_settings.SoundEnabled)
+        {
+            return;
+        }
+
+        if (success && operationName.Equals("Read ID", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
         try
         {
+            if (success && File.Exists(SuccessSoundPath))
+            {
+                using var player = new SoundPlayer(SuccessSoundPath);
+                player.Play();
+                return;
+            }
+
             (success ? SystemSounds.Asterisk : SystemSounds.Hand).Play();
         }
         catch
@@ -2144,13 +2165,6 @@ public partial class MainWindow : Window
             // Best-effort only; sound failures must never affect programmer operations.
         }
     }
-
-    private static bool ShouldPlayCompletionSound(string operationName) =>
-        operationName.StartsWith("Read chip", StringComparison.OrdinalIgnoreCase) ||
-        operationName.StartsWith("Write chip", StringComparison.OrdinalIgnoreCase) ||
-        operationName.StartsWith("Erase chip", StringComparison.OrdinalIgnoreCase) ||
-        operationName.StartsWith("Verify", StringComparison.OrdinalIgnoreCase) ||
-        operationName.Contains("verify", StringComparison.OrdinalIgnoreCase);
 
     private ChipProfile CurrentChip() => ChipCombo.SelectedItem as ChipProfile ?? _chips[0];
 
