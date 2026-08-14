@@ -48,7 +48,10 @@
                         <Button x:Name="AnalyzeSingleButton" Width="86" Height="26"
                             Margin="0,0,8,0" Click="AnalyzeSingle_Click">Analyze BIOS</Button>
                         <Button x:Name="ClearMeButton" Width="76" Height="26"
+                            Margin="0,0,8,0"
                             Click="ClearMe_Click">Clear ME</Button>
+                        <Button x:Name="StopClearMeButton" Width="62" Height="26"
+                            IsEnabled="False" Click="StopClearMe_Click">Stop</Button>
                     </StackPanel>
                 </Grid>
             </TabItem>
@@ -98,7 +101,10 @@
                         <Button x:Name="AnalyzeDualButton" Width="86" Height="26"
                             Margin="0,0,8,0" Click="AnalyzeDual_Click">Analyze BIOS</Button>
                         <Button x:Name="ClearDualMeButton" Width="76" Height="26"
+                            Margin="0,0,8,0"
                             Click="ClearDualMe_Click">Clear ME</Button>
+                        <Button x:Name="StopDualClearMeButton" Width="62" Height="26"
+                            IsEnabled="False" Click="StopClearMe_Click">Stop</Button>
                     </StackPanel>
                 </Grid>
             </TabItem>

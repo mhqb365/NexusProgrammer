@@ -25,6 +25,7 @@ internal static partial class ClearMeCandidateFinder
             .Where(path => IsMeRegionFile(path) && Path.GetFileName(path).Contains($"{target.Major}.", StringComparison.OrdinalIgnoreCase))
             .Select(path => new { Path = path, Score = ScoreMeRegion(path, info, targetVersion, target.Major, target.Minor) })
             .Where(item => item.Score > 0)
+            .Where(item => IsSameMinorAndNotOlder(item.Path, target))
             .OrderByDescending(item => item.Score)
             .ThenBy(item => item.Path, StringComparer.OrdinalIgnoreCase)
             .Select(item => item.Path)
@@ -39,6 +40,7 @@ internal static partial class ClearMeCandidateFinder
             .Where(path => IsMeRegionFile(path))
             .Select(path => new { Path = path, Score = ScoreMeRegionRelaxed(path, info, targetVersion, targetMajor, targetMinor) })
             .Where(item => item.Score > 0)
+            .Where(item => IsSameMinorAndNotOlder(item.Path, MeaAnalyzer.VersionParts(targetVersion)))
             .OrderByDescending(item => item.Score)
             .ThenBy(item => item.Path, StringComparer.OrdinalIgnoreCase)
             .Select(item => item.Path)
@@ -60,7 +62,7 @@ internal static partial class ClearMeCandidateFinder
         if (target.Major > 0)
         {
             var sameMajor = candidates
-                .Where(path => MeaAnalyzer.VersionParts(path).Major == target.Major ||
+                .Where(path => FitVersionParts(path).Major == target.Major ||
                                path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                                    .Any(part => part.Equals(target.Major.ToString(), StringComparison.OrdinalIgnoreCase) ||
                                                 part.StartsWith($"{target.Major}.", StringComparison.OrdinalIgnoreCase)))
@@ -71,18 +73,10 @@ internal static partial class ClearMeCandidateFinder
             }
         }
 
-        if (target.Minor > 0)
-        {
-            var sameMinor = candidates.Where(path => MeaAnalyzer.VersionParts(path).Minor == target.Minor).ToList();
-            if (sameMinor.Count > 0)
-            {
-                candidates = sameMinor;
-            }
-        }
-
         return candidates
             .Select(path => new { Path = path, Score = ScoreFit(path, targetVersion) })
             .Where(item => item.Score > 0)
+            .Where(item => IsSameMajorAndNotOlderFit(item.Path, target))
             .OrderByDescending(item => item.Score)
             .ThenBy(item => item.Path, StringComparer.OrdinalIgnoreCase)
             .Select(item => item.Path)
@@ -205,7 +199,7 @@ internal static partial class ClearMeCandidateFinder
 
     private static double ScoreFit(string path, string targetVersion)
     {
-        var candidate = MeaAnalyzer.VersionParts(path);
+        var candidate = FitVersionParts(path);
         var target = MeaAnalyzer.VersionParts(targetVersion);
         var score = 0d;
         if (target.Major > 0)
@@ -223,12 +217,12 @@ internal static partial class ClearMeCandidateFinder
             score += 80;
         }
 
-        if (MeaAnalyzer.VersionParts(path) == target)
+        if (FitVersionParts(path) == target)
         {
             return score + 500;
         }
 
-        var distance = Math.Abs(MeaAnalyzer.VersionRank(path) - MeaAnalyzer.VersionRank(targetVersion));
+        var distance = Math.Abs(FitVersionRank(path) - MeaAnalyzer.VersionRank(targetVersion));
         return score + Math.Max(0, 100 - distance / 10_000d);
     }
 
@@ -360,8 +354,45 @@ internal static partial class ClearMeCandidateFinder
                name.Equals("fit.exe", StringComparison.OrdinalIgnoreCase) ||
                name.Equals("Flash Image Tool.exe", StringComparison.OrdinalIgnoreCase) ||
                Regex.IsMatch(name, @"^\d+\.\d+(?:\.\d+){0,2}\.exe$", RegexOptions.IgnoreCase) ||
-               MeaAnalyzer.VersionParts(path).Major > 0;
+               FitVersionParts(path).Major > 0;
     }
+
+    private static (int Major, int Minor, int Hotfix, int Build) FitVersionParts(string path)
+    {
+        var fileVersion = MeaAnalyzer.VersionParts(Path.GetFileName(path));
+        return fileVersion.Major > 0 ? fileVersion : MeaAnalyzer.VersionParts(path);
+    }
+
+    private static long FitVersionRank(string path)
+    {
+        var version = FitVersionParts(path);
+        return VersionRank(version);
+    }
+
+    private static bool IsSameMinorAndNotOlder(string path, (int Major, int Minor, int Hotfix, int Build) target)
+    {
+        var candidate = MeaAnalyzer.VersionParts(Path.GetFileName(path));
+        if (candidate.Major != target.Major || candidate.Minor != target.Minor)
+        {
+            return false;
+        }
+
+        return VersionRank(candidate) >= VersionRank(target);
+    }
+
+    private static bool IsSameMajorAndNotOlderFit(string path, (int Major, int Minor, int Hotfix, int Build) target)
+    {
+        var candidate = FitVersionParts(path);
+        if (candidate.Major != target.Major)
+        {
+            return false;
+        }
+
+        return VersionRank(candidate) >= VersionRank(target);
+    }
+
+    private static long VersionRank((int Major, int Minor, int Hotfix, int Build) version) =>
+        version.Major * 1_000_000_000L + version.Minor * 1_000_000L + version.Hotfix * 10_000L + version.Build;
 
     [GeneratedRegex(@"[^A-Z0-9]+", RegexOptions.IgnoreCase)]
     private static partial Regex TokenRegex();

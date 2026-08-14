@@ -6,15 +6,15 @@ namespace NexusProgrammer;
 
 public partial class ClearMeWindow : Window
 {
-    private readonly Func<MemoryBufferOption, string, string, Task> _clearSingleBios;
-    private readonly Func<MemoryBufferOption, MemoryBufferOption, string, string, Task> _clearDualBios;
+    private readonly Func<MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> _clearSingleBios;
+    private readonly Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> _clearDualBios;
     private readonly Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> _analyzeBios;
     private readonly AppSettings _settings;
 
     public ClearMeWindow(
         IEnumerable<MemoryBufferOption> memoryTabs,
-        Func<MemoryBufferOption, string, string, Task> clearSingleBios,
-        Func<MemoryBufferOption, MemoryBufferOption, string, string, Task> clearDualBios,
+        Func<MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> clearSingleBios,
+        Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> clearDualBios,
         Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> analyzeBios,
         AppSettings settings,
         ClearMeCandidates candidates)
@@ -50,6 +50,8 @@ public partial class ClearMeWindow : Window
         ApplyTabHeight();
         UpdateClearMeButton();
     }
+
+    private CancellationTokenSource? _clearMeCts;
 
     private void ClearMeTabs_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
@@ -128,27 +130,12 @@ public partial class ClearMeWindow : Window
 
     private static void LoadCandidates(
         System.Windows.Controls.ComboBox comboBox,
-        IEnumerable<string> rankedCandidates,
-        string root,
-        string pattern)
+        IEnumerable<string> rankedCandidates)
     {
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ranked = rankedCandidates.Where(File.Exists).ToList();
         foreach (var candidate in ranked)
         {
             comboBox.Items.Add(FilePathOption.FromPath(candidate));
-            seen.Add(candidate);
-        }
-
-        if (ranked.Count > 0 && !string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
-        {
-            foreach (var file in Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories).OrderBy(Path.GetFileName))
-            {
-                if (seen.Add(file))
-                {
-                    comboBox.Items.Add(FilePathOption.FromPath(file));
-                }
-            }
         }
 
         if (comboBox.Items.Count > 0)
@@ -173,10 +160,10 @@ public partial class ClearMeWindow : Window
 
     private void LoadCandidateLists(ClearMeCandidates candidates)
     {
-        LoadCandidates(MeRegionCombo, candidates.MeRegions, _settings.MeRegionRoot, "*.*");
-        LoadCandidates(FitCombo, candidates.FitTools, _settings.FitRoot, "*.exe");
-        LoadCandidates(DualMeRegionCombo, candidates.MeRegions, _settings.MeRegionRoot, "*.*");
-        LoadCandidates(DualFitCombo, candidates.FitTools, _settings.FitRoot, "*.exe");
+        LoadCandidates(MeRegionCombo, candidates.MeRegions);
+        LoadCandidates(FitCombo, candidates.FitTools);
+        LoadCandidates(DualMeRegionCombo, candidates.MeRegions);
+        LoadCandidates(DualFitCombo, candidates.FitTools);
         UpdateClearMeButton();
     }
 
@@ -243,18 +230,22 @@ public partial class ClearMeWindow : Window
         }
 
         var meRegion = SelectedPath(MeRegionCombo);
-        var fit = SelectedPath(FitCombo);
-        if (string.IsNullOrWhiteSpace(meRegion) || string.IsNullOrWhiteSpace(fit))
+        var fitCandidates = SelectedFitPaths(FitCombo);
+        if (string.IsNullOrWhiteSpace(meRegion) || fitCandidates.Count == 0)
         {
             MessageBox.Show(this, "Select ME Region and FIT first.", "Clear ME", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        ClearMeButton.IsEnabled = false;
+        SetClearMeRunning(true);
+        _clearMeCts = new CancellationTokenSource();
         try
         {
-            await _clearSingleBios(memory, meRegion, fit);
+            await _clearSingleBios(memory, meRegion, fitCandidates, _clearMeCts.Token);
             Close();
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception ex)
         {
@@ -262,12 +253,50 @@ public partial class ClearMeWindow : Window
         }
         finally
         {
-            ClearMeButton.IsEnabled = true;
+            _clearMeCts?.Dispose();
+            _clearMeCts = null;
+            SetClearMeRunning(false);
         }
     }
 
     private static string SelectedPath(System.Windows.Controls.ComboBox comboBox) =>
         comboBox.SelectedItem is FilePathOption option ? option.Path : comboBox.Text.Trim();
+
+    private static IReadOnlyList<string> SelectedFitPaths(System.Windows.Controls.ComboBox comboBox)
+    {
+        var selected = SelectedPath(comboBox);
+        if (string.IsNullOrWhiteSpace(selected))
+        {
+            return [];
+        }
+
+        var selectedVersion = MeaAnalyzer.VersionParts(selected);
+        var selectedRank = FitVersionRank(selected);
+        var fallbacks = comboBox.Items
+            .OfType<FilePathOption>()
+            .Select(option => option.Path)
+            .Where(path => !path.Equals(selected, StringComparison.OrdinalIgnoreCase))
+            .Select(path => new { Path = path, Version = FitVersionParts(path), Rank = FitVersionRank(path) })
+            .Where(item => selectedVersion.Major > 0 &&
+                           item.Version.Major == selectedVersion.Major &&
+                           item.Rank > selectedRank)
+            .OrderBy(item => item.Rank - selectedRank)
+            .Select(item => item.Path);
+
+        return [selected, .. fallbacks];
+    }
+
+    private static (int Major, int Minor, int Hotfix, int Build) FitVersionParts(string path)
+    {
+        var fileVersion = MeaAnalyzer.VersionParts(System.IO.Path.GetFileName(path));
+        return fileVersion.Major > 0 ? fileVersion : MeaAnalyzer.VersionParts(path);
+    }
+
+    private static long FitVersionRank(string path)
+    {
+        var version = FitVersionParts(path);
+        return version.Major * 1_000_000_000L + version.Minor * 1_000_000L + version.Hotfix * 10_000L + version.Build;
+    }
 
     private async void ClearDualMe_Click(object sender, RoutedEventArgs e)
     {
@@ -280,18 +309,22 @@ public partial class ClearMeWindow : Window
         }
 
         var meRegion = SelectedPath(DualMeRegionCombo);
-        var fit = SelectedPath(DualFitCombo);
-        if (string.IsNullOrWhiteSpace(meRegion) || string.IsNullOrWhiteSpace(fit))
+        var fitCandidates = SelectedFitPaths(DualFitCombo);
+        if (string.IsNullOrWhiteSpace(meRegion) || fitCandidates.Count == 0)
         {
             MessageBox.Show(this, "Select ME Region and FIT first.", "Clear ME", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        ClearDualMeButton.IsEnabled = false;
+        SetClearMeRunning(true);
+        _clearMeCts = new CancellationTokenSource();
         try
         {
-            await _clearDualBios(memory1, memory2, meRegion, fit);
+            await _clearDualBios(memory1, memory2, meRegion, fitCandidates, _clearMeCts.Token);
             Close();
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception ex)
         {
@@ -299,7 +332,33 @@ public partial class ClearMeWindow : Window
         }
         finally
         {
-            ClearDualMeButton.IsEnabled = true;
+            _clearMeCts?.Dispose();
+            _clearMeCts = null;
+            SetClearMeRunning(false);
+        }
+    }
+
+    private void StopClearMe_Click(object sender, RoutedEventArgs e)
+    {
+        StopClearMeButton.IsEnabled = false;
+        StopDualClearMeButton.IsEnabled = false;
+        _clearMeCts?.Cancel();
+    }
+
+    private void SetClearMeRunning(bool running)
+    {
+        AnalyzeSingleButton.IsEnabled = !running;
+        AnalyzeDualButton.IsEnabled = !running;
+        StopClearMeButton.IsEnabled = running;
+        StopDualClearMeButton.IsEnabled = running;
+        if (running)
+        {
+            ClearMeButton.IsEnabled = false;
+            ClearDualMeButton.IsEnabled = false;
+        }
+        else
+        {
+            UpdateClearMeButton();
         }
     }
 }

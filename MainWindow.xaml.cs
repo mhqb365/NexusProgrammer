@@ -876,13 +876,13 @@ public partial class MainWindow : Window
             .OrderBy(tab => tab.Index)
             .Select(tab => new MemoryBufferOption(MemoryTabLabel(tab.Index), tab.Buffer.ToArray(), tab.SourceFileName));
 
-    private async Task ClearSingleBiosAsync(MemoryBufferOption memory, string meRegionPath, string fitPath)
+    private async Task ClearSingleBiosAsync(MemoryBufferOption memory, string meRegionPath, IReadOnlyList<string> fitPaths, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         await RunDialogOperationAsync("Clear ME", null, async _ =>
         {
             AppendLog($"Clear ME request: {memory.Label}");
-            var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPath, fitPath);
+            var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPath, fitPaths, AppendLog, cancellationToken);
             stopwatch.Stop();
             var tab = AddBiosTab();
             MemoryTabControl.SelectedItem = tab;
@@ -905,7 +905,7 @@ public partial class MainWindow : Window
         }, logCompletion: false);
     }
 
-    private async Task ClearDualBiosAsync(MemoryBufferOption memory1, MemoryBufferOption memory2, string meRegionPath, string fitPath)
+    private async Task ClearDualBiosAsync(MemoryBufferOption memory1, MemoryBufferOption memory2, string meRegionPath, IReadOnlyList<string> fitPaths, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         await RunDialogOperationAsync("Clear ME", null, async _ =>
@@ -914,7 +914,7 @@ public partial class MainWindow : Window
             var merged = new byte[memory1.Buffer.Length + memory2.Buffer.Length];
             Buffer.BlockCopy(memory1.Buffer, 0, merged, 0, memory1.Buffer.Length);
             Buffer.BlockCopy(memory2.Buffer, 0, merged, memory1.Buffer.Length, memory2.Buffer.Length);
-            var result = await ClearMeSingleBiosService.ClearAsync(merged, meRegionPath, fitPath);
+            var result = await ClearMeSingleBiosService.ClearAsync(merged, meRegionPath, fitPaths, AppendLog, cancellationToken);
             stopwatch.Stop();
             if (result.Bios.Length <= memory1.Buffer.Length)
             {
@@ -2172,6 +2172,13 @@ public partial class MainWindow : Window
             }
 
             PlayOperationSound(name, success: true);
+        }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            OperationStatusText.Text = "Cancelled";
+            AppendLog($"{name} cancelled after {FormatDuration(stopwatch.Elapsed)}");
+            throw;
         }
         catch (Exception ex)
         {
