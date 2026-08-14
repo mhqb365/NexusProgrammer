@@ -57,8 +57,9 @@ internal static class ClearMeSingleBiosService
             }
             catch (Exception ex) when (candidates.Count > 1 && ex is not OperationCanceledException)
             {
-                log?.Invoke($"Clear ME FIT failed: {Path.GetFileName(fitPath)} - {FirstLine(ex.Message)}");
-                errors.Add($"{Path.GetFileName(fitPath)}: {ex.Message}");
+                var error = CompactError(ex.Message);
+                log?.Invoke($"Clear ME FIT failed: {Path.GetFileName(fitPath)} - {error}");
+                errors.Add($"{Path.GetFileName(fitPath)}: {error}");
             }
         }
 
@@ -111,7 +112,6 @@ internal static class ClearMeSingleBiosService
                     ? outputPath
                     : FindBuiltImage(tempRoot, Path.GetDirectoryName(fitPath));
             }
-
             if (build.ExitCode != 0 && builtPath is null)
             {
                 throw new InvalidOperationException(SummarizeFitError(build.Output));
@@ -141,7 +141,7 @@ internal static class ClearMeSingleBiosService
         bool usesModularFit,
         string fitPath,
         string inputPath,
-        string meRegionPath,
+        string? meRegionPath,
         string outputPath,
         string workingDirectory,
         CancellationToken cancellationToken)
@@ -170,14 +170,14 @@ internal static class ClearMeSingleBiosService
                 File.Delete(outputPath);
             }
 
-            var repairedInput = CreateMeFileSystemRepairedInput(inputPath, meRegionPath, workingDirectory);
+            var repairedInput = CreateMeFileSystemRepairedInput(inputPath, meRegionPath, workingDirectory, log);
             log?.Invoke($"Clear ME repair input: ME offset 0x{repairedInput.Region.Offset:X}, size {repairedInput.Region.Size} bytes");
             log?.Invoke($"Clear ME FIT retry after repair: {Path.GetFileName(fitPath)}");
             var retry = await RunFitBuildAsync(
                 usesModularFit,
                 fitPath,
                 repairedInput.Path,
-                meRegionPath,
+                null,
                 outputPath,
                 workingDirectory,
                 cancellationToken);
@@ -209,7 +209,7 @@ internal static class ClearMeSingleBiosService
     private static async Task<FitRunResult> RunClassicFitAsync(
         string fitPath,
         string inputPath,
-        string meRegionPath,
+        string? meRegionPath,
         string outputPath,
         string workingDirectory,
         CancellationToken cancellationToken)
@@ -221,17 +221,16 @@ internal static class ClearMeSingleBiosService
             return save;
         }
 
-        return await RunFitAsync(
-            fitPath,
-            $"-b -f \"{configPath}\" -me \"{meRegionPath}\" -o \"{outputPath}\"",
-            workingDirectory,
-            cancellationToken);
+        var arguments = string.IsNullOrWhiteSpace(meRegionPath)
+            ? $"-b -f \"{configPath}\" -o \"{outputPath}\""
+            : $"-b -f \"{configPath}\" -me \"{meRegionPath}\" -o \"{outputPath}\"";
+        return await RunFitAsync(fitPath, arguments, workingDirectory, cancellationToken);
     }
 
     private static async Task<FitRunResult> RunModularFitAsync(
         string fitPath,
         string inputPath,
-        string meRegionPath,
+        string? meRegionPath,
         string outputPath,
         string workingDirectory,
         CancellationToken cancellationToken)
@@ -248,8 +247,14 @@ internal static class ClearMeSingleBiosService
             return decompose;
         }
 
-        PatchModularMeRegion(configPath, cleanConfigPath, meRegionPath);
-        return await RunFitAsync(fitPath, $"--loadconfig \"{cleanConfigPath}\" --build \"{outputPath}\"", workingDirectory, cancellationToken);
+        var buildConfigPath = configPath;
+        if (!string.IsNullOrWhiteSpace(meRegionPath))
+        {
+            PatchModularMeRegion(configPath, cleanConfigPath, meRegionPath);
+            buildConfigPath = cleanConfigPath;
+        }
+
+        return await RunFitAsync(fitPath, $"--loadconfig \"{buildConfigPath}\" --build \"{outputPath}\"", workingDirectory, cancellationToken);
     }
 
     private static void PatchModularMeRegion(string configPath, string outputPath, string meRegionPath)
@@ -268,15 +273,20 @@ internal static class ClearMeSingleBiosService
         document.Save(outputPath);
     }
 
-    private static RepairedInput CreateMeFileSystemRepairedInput(string inputPath, string meRegionPath, string workingDirectory)
+    private static RepairedInput CreateMeFileSystemRepairedInput(string inputPath, string meRegionPath, string workingDirectory, Action<string>? log)
     {
         var data = File.ReadAllBytes(inputPath);
         var meRegion = File.ReadAllBytes(meRegionPath);
         var region = IntelFlashDescriptorRegion(data, 2, "ME");
-        if (meRegion.Length > region.Size)
+        if (region.Offset + meRegion.Length > data.Length)
         {
             throw new InvalidOperationException(
-                $"Selected ME Region is larger than BIOS ME region ({meRegion.Length} > {region.Size} bytes).");
+                $"Selected ME Region exceeds BIOS image bounds ({region.Offset + meRegion.Length} > {data.Length} bytes).");
+        }
+
+        if (meRegion.Length > region.Size)
+        {
+            log?.Invoke($"Selected ME Region is larger than BIOS ME region ({meRegion.Length} > {region.Size} bytes). Writing full ME Region and overwriting following bytes.");
         }
 
         Array.Fill<byte>(data, 0xFF, region.Offset, region.Size);
@@ -447,6 +457,21 @@ internal static class ClearMeSingleBiosService
         text.Replace("\r", string.Empty)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault() ?? text;
+
+    private static string CompactError(string text)
+    {
+        var lines = CleanLines(text).ToArray();
+        if (lines.Length == 0)
+        {
+            return text.Trim();
+        }
+
+        var primary = lines[0];
+        var importantDetail = lines.FirstOrDefault(line =>
+            line.StartsWith("ME file system repair retry was skipped:", StringComparison.OrdinalIgnoreCase) ||
+            line.StartsWith("FIT output size mismatch:", StringComparison.OrdinalIgnoreCase));
+        return importantDetail is null ? primary : $"{primary} {importantDetail}";
+    }
 
     private static IEnumerable<string> CleanLines(string output) =>
         output.Replace("\r", string.Empty)

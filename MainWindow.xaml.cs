@@ -815,7 +815,7 @@ public partial class MainWindow : Window
 
     private void ClearMe_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync, ClearDualBiosAsync, AnalyzeClearMeBiosAsync, _settings, new ClearMeCandidates([], []))
+        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync, ClearDualBiosAsync, AnalyzeClearMeBiosAsync, _settings, new ClearMeCandidates([], []), AppendLog)
         {
             Owner = this
         };
@@ -895,7 +895,7 @@ public partial class MainWindow : Window
             RebuildRows();
             UpdateStatus();
             AppendLog($"Clear ME build completed: {memory.Label} -> {MemoryTabLabel(_activeMemoryTab?.Index ?? 0)} in {FormatDuration(stopwatch.Elapsed)}");
-            AppendLog(result.Summary);
+            AppendLogLines(result.Summary);
             AppendLog($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
             var suggestedFileName = ClearMeFileNameFor(memory);
             var postClearOperation = Dispatcher.BeginInvoke(new Action(() =>
@@ -927,7 +927,7 @@ public partial class MainWindow : Window
             var tab2 = AddMemoryTabWithBuffer(second, ClearMeFileNameFor(memory2));
             MemoryTabControl.SelectedItem = tab1;
             AppendLog($"Clear ME dual build completed: {memory1.Label} + {memory2.Label} -> {MemoryTabLabel(_memoryTabs[tab1].Index)} + {MemoryTabLabel(_memoryTabs[tab2].Index)} in {FormatDuration(stopwatch.Elapsed)}");
-            AppendLog(result.Summary);
+            AppendLogLines(result.Summary);
             AppendLog($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
             var fileName1 = ClearMeFileNameFor(memory1);
             var fileName2 = ClearMeFileNameFor(memory2);
@@ -2184,7 +2184,7 @@ public partial class MainWindow : Window
         {
             stopwatch.Stop();
             OperationStatusText.Text = "Error";
-            AppendLog($"ERROR after {FormatDuration(stopwatch.Elapsed)}: {ex.Message}");
+            AppendLog($"ERROR after {FormatDuration(stopwatch.Elapsed)}: {FirstLogLine(ex.Message)}");
             PlayOperationSound(name, success: false);
             throw;
         }
@@ -2231,7 +2231,7 @@ public partial class MainWindow : Window
         {
             stopwatch.Stop();
             OperationStatusText.Text = "Error";
-            AppendLog($"ERROR after {FormatDuration(stopwatch.Elapsed)}: {ex.Message}");
+            AppendLog($"ERROR after {FormatDuration(stopwatch.Elapsed)}: {FirstLogLine(ex.Message)}");
             PlayOperationSound(name, success: false);
         }
         finally
@@ -2496,6 +2496,17 @@ public partial class MainWindow : Window
         LogBox.ScrollToEnd();
     }
 
+    private void AppendLogLines(string message)
+    {
+        foreach (var line in message.Split([Environment.NewLine], StringSplitOptions.None))
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                AppendLog(line);
+            }
+        }
+    }
+
     private static string FormatBytes(int bytes)
     {
         if (bytes >= 1024 * 1024)
@@ -2505,6 +2516,11 @@ public partial class MainWindow : Window
 
         return bytes >= 1024 ? $"{bytes / 1024.0:0.##} KB" : $"{bytes} B";
     }
+
+    private static string FirstLogLine(string message) =>
+        message.Replace("\r", string.Empty)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? message;
 
     private static string FormatDuration(TimeSpan elapsed)
     {

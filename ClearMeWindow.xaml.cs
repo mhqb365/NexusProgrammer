@@ -10,6 +10,7 @@ public partial class ClearMeWindow : Window
     private readonly Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> _clearDualBios;
     private readonly Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> _analyzeBios;
     private readonly AppSettings _settings;
+    private readonly Action<string> _log;
 
     public ClearMeWindow(
         IEnumerable<MemoryBufferOption> memoryTabs,
@@ -17,13 +18,15 @@ public partial class ClearMeWindow : Window
         Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> clearDualBios,
         Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> analyzeBios,
         AppSettings settings,
-        ClearMeCandidates candidates)
+        ClearMeCandidates candidates,
+        Action<string> log)
     {
         InitializeComponent();
         _clearSingleBios = clearSingleBios;
         _clearDualBios = clearDualBios;
         _analyzeBios = analyzeBios;
         _settings = settings;
+        _log = log;
         var memoryOptions = memoryTabs.ToList();
         MemoryCombo.ItemsSource = memoryOptions;
         MemoryCombo.DisplayMemberPath = nameof(MemoryBufferOption.Label);
@@ -247,9 +250,8 @@ public partial class ClearMeWindow : Window
         catch (OperationCanceledException)
         {
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            MessageBox.Show(this, ex.Message, "Clear ME", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -326,9 +328,8 @@ public partial class ClearMeWindow : Window
         catch (OperationCanceledException)
         {
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            MessageBox.Show(this, ex.Message, "Clear ME", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {

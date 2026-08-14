@@ -73,7 +73,7 @@ internal static partial class ClearMeCandidateFinder
             }
         }
 
-        return candidates
+        var ranked = candidates
             .Select(path => new { Path = path, Score = ScoreFit(path, targetVersion) })
             .Where(item => item.Score > 0)
             .Where(item => IsSameMajorAndNotOlderFit(item.Path, target))
@@ -81,6 +81,13 @@ internal static partial class ClearMeCandidateFinder
             .ThenBy(item => item.Path, StringComparer.OrdinalIgnoreCase)
             .Select(item => item.Path)
             .ToList();
+        return ranked.Count > 0
+            ? ranked
+            : candidates
+                .Where(path => IsSameMajorAndNotOlderFit(path, target))
+                .OrderBy(path => Math.Abs(FitVersionRank(path) - MeaAnalyzer.VersionRank(targetVersion)))
+                .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
     }
 
     private static double ScoreMeRegion(string path, MeaFirmwareInfo input, string targetVersion, int targetMajor, int targetMinor)
