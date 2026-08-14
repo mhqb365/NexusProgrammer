@@ -8,7 +8,7 @@
     <Authors>mhqb365.com</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/mhqb365/NexusProgrammer</RepositoryUrl>
-    <Version>1.1.3.1</Version>
+    <Version>1.1.3.2</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
@@ -23,9 +23,14 @@
     <Resource Include="icon.ico" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="MEA\**\*" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
+  <Target Name="CopyMeaTools" AfterTargets="Build">
+    <RemoveDir Directories="$(TargetDir)MEA" />
+    <ItemGroup>
+      <MeaToolFiles Include="$(MSBuildProjectDirectory)\MEA\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MeaToolFiles)"
+      DestinationFiles="@(MeaToolFiles->'$(TargetDir)MEA\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
 
   <Target Name="BuildIcCatalog" AfterTargets="Build">
     <Exec

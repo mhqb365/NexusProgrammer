@@ -22,7 +22,25 @@ public partial class MainWindow : Window
     private const int MaxHexPreviewRows = 4096;
     private const int BytesPerHexRow = 16;
     private const int SearchHitContextBytes = 16;
+    private const int MaxTrailingMetadataBytes = 1024 * 1024;
     private static readonly bool MeaFeatureEnabled = true;
+    private static readonly int[] ValidBiosSizes =
+    [
+        512 * 1024,
+        1 * 1024 * 1024,
+        2 * 1024 * 1024,
+        4 * 1024 * 1024,
+        8 * 1024 * 1024,
+        12 * 1024 * 1024,
+        16 * 1024 * 1024,
+        20 * 1024 * 1024,
+        24 * 1024 * 1024,
+        32 * 1024 * 1024,
+        40 * 1024 * 1024,
+        48 * 1024 * 1024,
+        64 * 1024 * 1024,
+        128 * 1024 * 1024
+    ];
     private static readonly byte[] XgproMetadataMarker =
     [
         0x2D, 0x43, 0x6F, 0x6E, 0x66, 0x69, 0x67, 0x75,
@@ -362,6 +380,7 @@ public partial class MainWindow : Window
         if (_activeMemoryTab is not null)
         {
             _activeMemoryTab.Buffer = buffer;
+            _activeMemoryTab.MeaAnalysis = null;
         }
     }
 
@@ -393,6 +412,11 @@ public partial class MainWindow : Window
         if ((uint)offset < _buffer.Length)
         {
             _buffer[offset] = value;
+            if (_activeMemoryTab is not null)
+            {
+                _activeMemoryTab.MeaAnalysis = null;
+            }
+
             var rowIndex = (offset - _previewStartOffset) / BytesPerHexRow;
             if ((uint)rowIndex < _rows.Count)
             {
@@ -692,7 +716,7 @@ public partial class MainWindow : Window
 
         if (!MeaAnalyzer.IsLikelyIntelFirmware(_buffer))
         {
-            AppendLog("MEA analysis skipped: non-Intel ROM");
+            AppendLog("MEA analysis skipped: non-Intel image");
             return;
         }
 
@@ -700,6 +724,11 @@ public partial class MainWindow : Window
         var stopwatch = Stopwatch.StartNew();
         var result = await MeaAnalyzer.AnalyzeAsync(_buffer);
         stopwatch.Stop();
+        if (_activeMemoryTab is not null)
+        {
+            _activeMemoryTab.MeaAnalysis = result.Success ? result : null;
+        }
+
         AppendLog(result.Success
             ? $"MEA analysis success in {FormatDuration(stopwatch.Elapsed)}{Environment.NewLine}{result.Summary}"
             : $"MEA analysis failed in {FormatDuration(stopwatch.Elapsed)}: {result.Summary}");
@@ -752,7 +781,22 @@ public partial class MainWindow : Window
 
     private void ClearMe_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync)
+        var settings = AppSettingsService.Load();
+        var candidates = new ClearMeCandidates([], []);
+        var analysis = _activeMemoryTab?.MeaAnalysis;
+        var hasValidAnalysis = analysis?.Success == true;
+        if (analysis?.Success == true)
+        {
+            candidates = ClearMeCandidateFinder.Find(settings, analysis.Info);
+            AppendLog($"Clear ME target: version {analysis.Info.Version}, SKU {analysis.Info.Sku}, FIT {analysis.Info.Fit}");
+            AppendLog($"Clear ME candidates: {candidates.MeRegions.Count} ME Region, {candidates.FitTools.Count} FIT");
+        }
+        else if (MeaAnalyzer.IsLikelyIntelFirmware(_buffer))
+        {
+            AppendLog("Clear ME candidates skipped: run MEA analysis by reading or opening this BIOS first");
+        }
+
+        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync, settings, candidates, hasValidAnalysis)
         {
             Owner = this
         };
@@ -762,23 +806,36 @@ public partial class MainWindow : Window
     private IEnumerable<MemoryBufferOption> GetMemoryTabOptions() =>
         _memoryTabs.Values
             .OrderBy(tab => tab.Index)
-            .Select(tab => new MemoryBufferOption(MemoryTabLabel(tab.Index), tab.Buffer.ToArray()));
+            .Select(tab => new MemoryBufferOption(MemoryTabLabel(tab.Index), tab.Buffer.ToArray(), tab.SourceFileName));
 
     private async Task ClearSingleBiosAsync(MemoryBufferOption memory, string meRegionPath, string fitPath)
     {
-        await RunDialogOperationAsync("Clear ME", memory.Buffer.Length, async _ =>
+        var stopwatch = Stopwatch.StartNew();
+        await RunDialogOperationAsync("Clear ME", null, async _ =>
         {
             AppendLog($"Clear ME request: {memory.Label}");
             var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPath, fitPath);
+            stopwatch.Stop();
             var tab = AddBiosTab();
             MemoryTabControl.SelectedItem = tab;
             SetActiveBuffer(result.Bios);
+            if (_activeMemoryTab is not null)
+            {
+                _activeMemoryTab.SourceFileName = ClearMeFileNameFor(memory);
+            }
+
             RebuildRows();
             UpdateStatus();
-            AppendLog($"Clear ME completed: {memory.Label} -> {MemoryTabLabel(_activeMemoryTab?.Index ?? 0)}");
+            AppendLog($"Clear ME build completed: {memory.Label} -> {MemoryTabLabel(_activeMemoryTab?.Index ?? 0)} in {FormatDuration(stopwatch.Elapsed)}");
             AppendLog(result.Summary);
-            await AnalyzeCurrentBufferWithMeaAsync();
-        });
+            AppendLog($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
+            var suggestedFileName = ClearMeFileNameFor(memory);
+            var postClearOperation = Dispatcher.BeginInvoke(new Action(async () =>
+            {
+                SaveCurrentBufferWithDialog(suggestedFileName);
+                await AnalyzeCurrentBufferWithMeaAsync();
+            }));
+        }, logCompletion: false);
     }
 
     private async void Erase_Click(object sender, RoutedEventArgs e)
@@ -1478,6 +1535,41 @@ public partial class MainWindow : Window
         return trimmed;
     }
 
+    private static byte[] TrimBiosMetadata(byte[] buffer, out string reason, out int removedBytes)
+    {
+        var trimmed = StripXgproMetadata(buffer, out var markerOffset, out removedBytes);
+        if (removedBytes > 0)
+        {
+            reason = $"XGecu metadata marker at 0x{markerOffset:X6}";
+            return trimmed;
+        }
+
+        var targetSize = ValidBiosSizes
+            .Where(size => size < buffer.Length)
+            .DefaultIfEmpty(0)
+            .Max();
+        if (targetSize == 0)
+        {
+            reason = string.Empty;
+            removedBytes = 0;
+            return buffer;
+        }
+
+        var excess = buffer.Length - targetSize;
+        if (excess <= 0 || excess > MaxTrailingMetadataBytes)
+        {
+            reason = string.Empty;
+            removedBytes = 0;
+            return buffer;
+        }
+
+        var result = new byte[targetSize];
+        Buffer.BlockCopy(buffer, 0, result, 0, targetSize);
+        reason = $"valid BIOS size {FormatBytes(targetSize)} with {FormatBytes(excess)} trailing bytes";
+        removedBytes = excess;
+        return result;
+    }
+
     private static List<int> FindAllBytes(byte[] buffer, byte[] pattern)
     {
         var offsets = new List<int>();
@@ -1692,7 +1784,14 @@ public partial class MainWindow : Window
 
     private async Task LoadBufferFromFileAsync(string fileName)
     {
-        SetActiveBuffer(StripXgproMetadata(File.ReadAllBytes(fileName), out var markerOffset, out var removedBytes));
+        var originalBytes = File.ReadAllBytes(fileName);
+        var buffer = TrimBiosMetadata(originalBytes, out var trimReason, out var removedBytes);
+        SetActiveBuffer(buffer);
+        if (_activeMemoryTab is not null)
+        {
+            _activeMemoryTab.SourceFileName = fileName;
+        }
+
         _currentOffset = 0;
         _searchHits.Clear();
         RebuildRows();
@@ -1700,7 +1799,7 @@ public partial class MainWindow : Window
         AppendLog($"Loaded {fileName} ({FormatBytes(_buffer.Length)})");
         if (removedBytes > 0)
         {
-            AppendLog($"Removed XGecu metadata: {removedBytes} bytes from 0x{markerOffset:X6} to EOF");
+            AppendLog($"Input file have {trimReason}. Trimmed {FormatBytes(removedBytes)}: {FormatBytes(originalBytes.Length)} -> {FormatBytes(_buffer.Length)}");
         }
 
         await AnalyzeCurrentBufferWithMeaAsync();
@@ -1711,12 +1810,15 @@ public partial class MainWindow : Window
         SaveCurrentBufferWithDialog();
     }
 
-    private void SaveCurrentBufferWithDialog()
+    private void SaveCurrentBufferWithDialog(string? suggestedFileName = null)
     {
+        var initialDirectory = SuggestedInitialDirectory();
+        var fileName = suggestedFileName ?? $"{CurrentChip().Name}.bin";
         var dialog = new SaveFileDialog
         {
             Filter = "Binary files (*.bin)|*.bin|ROM files (*.rom)|*.rom|All files (*.*)|*.*",
-            FileName = $"{CurrentChip().Name}.bin"
+            InitialDirectory = initialDirectory,
+            FileName = UniqueFileName(initialDirectory, fileName)
         };
         if (dialog.ShowDialog(this) != true)
         {
@@ -1724,7 +1826,56 @@ public partial class MainWindow : Window
         }
 
         File.WriteAllBytes(dialog.FileName, _buffer);
+        if (_activeMemoryTab is not null)
+        {
+            _activeMemoryTab.SourceFileName = dialog.FileName;
+        }
+
         AppendLog($"Saved {dialog.FileName} ({FormatBytes(_buffer.Length)})");
+    }
+
+    private string SuggestedInitialDirectory()
+    {
+        var sourceFile = _activeMemoryTab?.SourceFileName;
+        return !string.IsNullOrWhiteSpace(sourceFile) && Path.IsPathRooted(sourceFile)
+            ? Path.GetDirectoryName(sourceFile) ?? Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)
+            : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+    }
+
+    private static string UniqueFileName(string directory, string fileName)
+    {
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        var extension = Path.GetExtension(fileName);
+        var candidate = fileName;
+        var index = 2;
+        while (File.Exists(Path.Combine(directory, candidate)))
+        {
+            candidate = $"{stem}_{index}{extension}";
+            index++;
+        }
+
+        return candidate;
+    }
+
+    private static string ClearMeFileNameFor(MemoryBufferOption memory)
+    {
+        var source = string.IsNullOrWhiteSpace(memory.SourceFileName)
+            ? memory.Label
+            : Path.GetFileNameWithoutExtension(memory.SourceFileName);
+        return $"{SafeFileStem(source)}_CLEARME.bin";
+    }
+
+    private static string SafeFileStem(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars().ToHashSet();
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value)
+        {
+            builder.Append(invalidChars.Contains(character) ? '_' : character);
+        }
+
+        var stem = builder.ToString().Trim();
+        return string.IsNullOrWhiteSpace(stem) ? "BIOS" : stem;
     }
 
     private void SaveLog_Click(object sender, RoutedEventArgs e)
@@ -1872,6 +2023,15 @@ public partial class MainWindow : Window
         });
     }
 
+    private void Setting_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SettingsWindow
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
+    }
+
     private static string AppVersion =>
         UpdateService.FormatVersion(UpdateService.CurrentVersion);
 
@@ -1881,7 +2041,7 @@ public partial class MainWindow : Window
     private Task RunOperationAsync(string name, Func<IProgress<int>, Task> operation, bool logLifecycle) =>
         RunOperationAsync(name, null, operation, logLifecycle);
 
-    private async Task RunDialogOperationAsync(string name, int? byteCount, Func<IProgress<int>, Task> operation)
+    private async Task RunDialogOperationAsync(string name, int? byteCount, Func<IProgress<int>, Task> operation, bool logCompletion = true)
     {
         if (_isBusy)
         {
@@ -1899,9 +2059,13 @@ public partial class MainWindow : Window
             stopwatch.Stop();
             OperationProgress.Value = 100;
             OperationStatusText.Text = "Ready";
-            AppendLog(byteCount is > 0
-                ? $"{name} completed: {FormatBytes(byteCount.Value)} in {FormatDuration(stopwatch.Elapsed)} ({FormatSpeed(byteCount.Value, stopwatch.Elapsed)})"
-                : $"{name} completed in {FormatDuration(stopwatch.Elapsed)}");
+            if (logCompletion)
+            {
+                AppendLog(byteCount is > 0
+                    ? $"{name} completed: {FormatBytes(byteCount.Value)} in {FormatDuration(stopwatch.Elapsed)} ({FormatSpeed(byteCount.Value, stopwatch.Elapsed)})"
+                    : $"{name} completed in {FormatDuration(stopwatch.Elapsed)}");
+            }
+
             PlayOperationSound(name, success: true);
         }
         catch (Exception ex)
@@ -2264,6 +2428,8 @@ internal sealed class MemoryTabState
     public HexEditorView Editor { get; }
     public ScrollBar ScrollBar { get; }
     public byte[] Buffer { get; set; }
+    public MeaAnalysisResult? MeaAnalysis { get; set; }
+    public string SourceFileName { get; set; } = string.Empty;
 }
 
 

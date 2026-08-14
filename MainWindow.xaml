@@ -298,6 +298,7 @@
                 <MenuItem x:Name="EraseWriteVerifyScriptMenuItem" Header="Erase + Write + Verify"
                     Tag="Erase + write + verify" Click="RunScript_Click" />
             </MenuItem>
+            <MenuItem x:Name="SettingMenuItem" Header="_Setting" Click="Setting_Click" />
             <MenuItem x:Name="AboutMenuItem" Header="_About" Click="About_Click" />
         </Menu>
 
@@ -509,12 +510,12 @@
                     <Button x:Name="HexSearchNextButton" DockPanel.Dock="Right" Width="24"
                         Height="20" Margin="2,4,2,4" Padding="0" ToolTip="Find next"
                         Click="HexSearchNext_Click">
-                        <iconPacks:PackIconLucide Width="12" Height="12" Kind="ChevronRight" />
+                        <iconPacks:PackIconLucide Width="10" Height="10" Kind="ChevronRight" />
                     </Button>
                     <Button x:Name="HexSearchPreviousButton" DockPanel.Dock="Right"
                         Width="24" Height="20" Margin="2,4,2,4" Padding="0"
                         ToolTip="Find previous" Click="HexSearchPrevious_Click">
-                        <iconPacks:PackIconLucide Width="12" Height="12" Kind="ChevronLeft" />
+                        <iconPacks:PackIconLucide Width="10" Height="10" Kind="ChevronLeft" />
                     </Button>
                     <Button x:Name="HexReplaceButton" DockPanel.Dock="Right" Width="64"
                         Height="20" Margin="2,4,2,4" Padding="0"
