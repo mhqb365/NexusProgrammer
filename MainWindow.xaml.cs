@@ -1857,10 +1857,10 @@ public partial class MainWindow : Window
         return candidate;
     }
 
-    private static string ClearMeFileNameFor(MemoryBufferOption memory)
+    private string ClearMeFileNameFor(MemoryBufferOption memory)
     {
         var source = string.IsNullOrWhiteSpace(memory.SourceFileName)
-            ? memory.Label
+            ? CurrentChip().Name
             : Path.GetFileNameWithoutExtension(memory.SourceFileName);
         return $"{SafeFileStem(source)}_CLEARME.bin";
     }
