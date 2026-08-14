@@ -1,6 +1,9 @@
 # Nexus Programmer
 
-![Nexus Programmer](NexusProgrammer.png)
+| | |
+|---|---|
+| ![CH341 support](Photos/CH341-support.png) | ![CH347 support](Photos/CH347-support.png) |
+| ![XGecu T48 support](Photos/T48-suppport.png) | ![Clear ME success](Photos/ClearME-success.png) |
 
 ## English
 
