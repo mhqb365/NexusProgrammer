@@ -1,8 +1,8 @@
 # Nexus Programmer
 
-| | |
-|---|---|
-| ![CH341 support](Photos/CH341-support.png) | ![CH347 support](Photos/CH347-support.png) |
+|                                               |                                                 |
+| --------------------------------------------- | ----------------------------------------------- |
+| ![CH341 support](Photos/CH341-support.png)    | ![CH347 support](Photos/CH347-support.png)      |
 | ![XGecu T48 support](Photos/T48-suppport.png) | ![Clear ME success](Photos/ClearME-success.png) |
 
 ## English
@@ -22,10 +22,10 @@ Nexus Programmer is a Windows utility app for CH341/CH347 and XGecu T48. It focu
 
 ## Requirements
 
-- Windows
-- .NET 8 SDK
-- WCH CH341/CH347 driver. Download and install it from [CH341SER.zip](docs/CH341SER.zip)
-- XGecu WinUSB driver for T48 hardware access. So you need to install [XGecu Software](https://github.com/Kreeblah/XGecu_Software) first to get the driver
+- Windows 10/11
+- .NET 8
+- Driver WCH CH341/CH347 👉 [CH34XPAR.zip](Programmers/CH34x/CH34XPAR.zip)
+- Driver XGecu WinUSB 👉 [T48DRIVER.zip](Programmers/XGecuT48/T48DRIVER.zip)
 
 ## Download
 
@@ -56,10 +56,10 @@ Nexus Programmer là ứng dụng Windows dành cho CH341/CH347 và XGecu T48. D
 
 ## Yêu cầu
 
-- Windows
-- .NET 8 SDK
-- Driver WCH CH341/CH347. Tải cái này về cài vào [CH341SER.zip](docs/CH341SER.zip)
-- Driver XGecu WinUSB để truy cập phần cứng T48. Cần cài [phần mềm XGecu](https://github.com/Kreeblah/XGecu_Software) trước để có driver
+- Windows 10/11
+- .NET 8
+- Driver WCH CH341/CH347 👉 [CH34XPAR.zip](Programmers/CH34x/CH34XPAR.zip)
+- Driver XGecu WinUSB 👉 [T48DRIVER.zip](Programmers/XGecuT48/T48DRIVER.zip)
 
 ## Tải về
 
