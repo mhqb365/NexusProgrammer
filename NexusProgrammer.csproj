@@ -15,13 +15,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="icon.ico" />
-    <Resource Include="icon.ico" />
-    <Content Include="success.wav" CopyToOutputDirectory="PreserveNewest" />
+    <None Remove="Assets\icon.ico" />
+    <Resource Include="Assets\icon.ico" />
+    <Content Include="Assets\success.wav" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target Name="CopyMeaTools" AfterTargets="Build">

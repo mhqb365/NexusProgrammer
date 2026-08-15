@@ -4,7 +4,7 @@
     xmlns:local="clr-namespace:NexusProgrammer"
     xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
     xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
-    xmlns:sys="clr-namespace:System;assembly=mscorlib" Title="Nexus Programmer" Icon="icon.ico"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib" Title="Nexus Programmer" Icon="/Assets/icon.ico"
     Height="620"
     Width="960"
     MinHeight="620" MinWidth="960" FontFamily="Segoe UI" FontSize="13"

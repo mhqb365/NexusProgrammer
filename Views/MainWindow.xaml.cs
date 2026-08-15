@@ -19,7 +19,7 @@ public partial class MainWindow : Window
 {
     private const string AppName = "Nexus Programmer";
     private const string ProjectUrl = "https://github.com/mhqb365/NexusProgrammer";
-    private static readonly string SuccessSoundPath = Path.Combine(AppContext.BaseDirectory, "success.wav");
+    private static readonly string SuccessSoundPath = Path.Combine(AppContext.BaseDirectory, "Assets", "success.wav");
     private const int MaxHexPreviewRows = 4096;
     private const int BytesPerHexRow = 16;
     private const int SearchHitContextBytes = 16;
