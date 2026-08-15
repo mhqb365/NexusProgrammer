@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -42,6 +43,10 @@ public sealed class HexEditorView : FrameworkElement
     {
         Focusable = true;
         ClipToBounds = true;
+
+        var clearBufferItem = new MenuItem { Header = "Clear buffer" };
+        clearBufferItem.Click += (_, _) => ClearBufferRequested?.Invoke(this, EventArgs.Empty);
+        ContextMenu = new ContextMenu { Items = { clearBufferItem } };
     }
 
     public void SetBuffer(byte[] buffer, Action<int, byte> byteChanged)
@@ -67,6 +72,8 @@ public sealed class HexEditorView : FrameworkElement
     public int VisibleLines => Math.Max(1, (int)((ActualHeight - HeaderHeight) / LineHeight));
 
     public event EventHandler? ScrollChanged;
+
+    public event EventHandler? ClearBufferRequested;
 
     public void ScrollToOffset(int offset)
     {

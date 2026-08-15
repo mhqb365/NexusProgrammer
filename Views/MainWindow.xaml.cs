@@ -80,6 +80,7 @@ public partial class MainWindow : Window
         _activeMemoryTab = new MemoryTabState(1, Bios1Tab, HexEditor, HexScrollBar, _buffer);
         _memoryTabs[Bios1Tab] = _activeMemoryTab;
         SearchHitsGrid.ItemsSource = _searchHits;
+        HexEditor.ClearBufferRequested += HexEditor_ClearBufferRequested;
         HexEditor.SetBuffer(_buffer, OnHexCellChanged);
         UpdateHexScrollBar();
         Title = $"{AppName} v{AppVersion}";
@@ -302,6 +303,7 @@ public partial class MainWindow : Window
             Foreground = (Brush)FindResource("TextBrush")
         };
         editor.ScrollChanged += (_, args) => HexEditor_ScrollChanged(editor, args);
+        editor.ClearBufferRequested += HexEditor_ClearBufferRequested;
 
         var scrollBar = new ScrollBar
         {
@@ -2013,6 +2015,28 @@ public partial class MainWindow : Window
         Array.Fill(_buffer, (byte)0xFF);
         RebuildRows();
         AppendLog("Buffer filled with FF");
+    }
+
+    private void HexEditor_ClearBufferRequested(object? sender, EventArgs e)
+    {
+        if (sender is not HexEditorView editor)
+        {
+            return;
+        }
+
+        var state = _memoryTabs.Values.FirstOrDefault(item => ReferenceEquals(item.Editor, editor));
+        if (state is null)
+        {
+            return;
+        }
+
+        MemoryTabControl.SelectedItem = state.Tab;
+        Array.Fill(state.Buffer, (byte)0xFF);
+        state.MeaAnalysis = null;
+        editor.SetBuffer(state.Buffer, OnHexCellChanged);
+        RebuildRows();
+        UpdateStatus();
+        AppendLog($"{MemoryTabLabel(state.Index)} buffer cleared to FF");
     }
 
     private void Fill00_Click(object sender, RoutedEventArgs e)
