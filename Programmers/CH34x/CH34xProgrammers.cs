@@ -10,6 +10,9 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
     private const int ReadChunkSize = 256 * 1024;
     private const int I2cReadChunkSize = 512;
     private const int WriteReadyTimeoutMs = 500;
+    private const int SpiInitializationDelayMs = 50;
+    private const int ReadIdMaxAttempts = 3;
+    private const int ReadIdRetryDelayMs = 10;
 
     public string Name => "CH347 native DLL";
 
@@ -54,11 +57,32 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         }
 
         EnsureSpi(chip);
-        using var device = OpenDevice();
         progress.Report(25);
-        var id = SpiTransfer([0x9F, 0x00, 0x00, 0x00]);
+        byte[] id = [];
+        for (var attempt = 1; attempt <= ReadIdMaxAttempts; attempt++)
+        {
+            // Some CH347 driver/firmware combinations return an idle bus on the
+            // first session after connecting. Reopen and reinitialize SPI for
+            // each retry so the retry follows the same path as a second click.
+            using (OpenDevice())
+            {
+                id = SpiRead([0x9F], 3);
+            }
+
+            if (!IsInvalidJedecId(id))
+            {
+                break;
+            }
+
+            progress.Report(25 + attempt * 20);
+            if (attempt < ReadIdMaxAttempts)
+            {
+                Thread.Sleep(ReadIdRetryDelayMs);
+            }
+        }
+
         progress.Report(100);
-        return id.Skip(1).Take(3).ToArray();
+        return id;
     });
 
     public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress) => Task.Run(() =>
@@ -198,8 +222,15 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             throw new InvalidOperationException("Cannot configure CH347 SPI controller.");
         }
 
+        // The first transfer can return idle bus data if it starts immediately
+        // after the controller changes the SPI pins and chip-select state.
+        Thread.Sleep(SpiInitializationDelayMs);
+
         return new Ch347Device();
     }
+
+    private static bool IsInvalidJedecId(byte[] id) =>
+        id.Length == 0 || id.All(value => value == 0xFF) || id.All(value => value == 0x00);
 
     private static byte[] SpiTransfer(byte[] buffer)
     {
