@@ -6,27 +6,24 @@ namespace NexusProgrammer;
 
 public partial class ClearMeWindow : Window
 {
-    private readonly Func<MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> _clearSingleBios;
-    private readonly Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> _clearDualBios;
+    private readonly Func<MemoryBufferOption, string, IReadOnlyList<string>, Action<string>, CancellationToken, Task> _clearSingleBios;
+    private readonly Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, Action<string>, CancellationToken, Task> _clearDualBios;
     private readonly Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> _analyzeBios;
     private readonly AppSettings _settings;
-    private readonly Action<string> _log;
 
     public ClearMeWindow(
         IEnumerable<MemoryBufferOption> memoryTabs,
-        Func<MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> clearSingleBios,
-        Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, CancellationToken, Task> clearDualBios,
+        Func<MemoryBufferOption, string, IReadOnlyList<string>, Action<string>, CancellationToken, Task> clearSingleBios,
+        Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, Action<string>, CancellationToken, Task> clearDualBios,
         Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> analyzeBios,
         AppSettings settings,
-        ClearMeCandidates candidates,
-        Action<string> log)
+        ClearMeCandidates candidates)
     {
         InitializeComponent();
         _clearSingleBios = clearSingleBios;
         _clearDualBios = clearDualBios;
         _analyzeBios = analyzeBios;
         _settings = settings;
-        _log = log;
         var memoryOptions = memoryTabs.ToList();
         MemoryCombo.ItemsSource = memoryOptions;
         MemoryCombo.DisplayMemberPath = nameof(MemoryBufferOption.Label);
@@ -68,7 +65,7 @@ public partial class ClearMeWindow : Window
 
     private void ApplyTabHeight()
     {
-        Height = ClearMeTabs.SelectedIndex == 1 ? 265 : 235;
+        ClearMeTabs.Height = ClearMeTabs.SelectedIndex == 1 ? 205 : 175;
     }
 
     private void ClearMemory_Click(object sender, RoutedEventArgs e)
@@ -206,7 +203,9 @@ public partial class ClearMeWindow : Window
         AnalyzeDualButton.IsEnabled = false;
         try
         {
+            AnalysisTextBox.Text = "Analyzing BIOS...";
             var candidates = await _analyzeBios(memories);
+            AnalysisTextBox.Text = candidates.AnalysisSummary;
             ClearComboItems(MeRegionCombo);
             ClearComboItems(FitCombo);
             ClearComboItems(DualMeRegionCombo);
@@ -215,6 +214,7 @@ public partial class ClearMeWindow : Window
         }
         catch (Exception ex)
         {
+            AnalysisTextBox.Text = $"Analyze failed{Environment.NewLine}{ex.Message}";
             MessageBox.Show(this, ex.Message, "Analyze BIOS", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -222,6 +222,33 @@ public partial class ClearMeWindow : Window
             AnalyzeSingleButton.IsEnabled = true;
             AnalyzeDualButton.IsEnabled = true;
         }
+    }
+
+    private void CopyAnalysisLog_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(AnalysisTextBox.Text))
+        {
+            Clipboard.SetText(AnalysisTextBox.Text);
+        }
+    }
+
+    private void ClearAnalysisLog_Click(object sender, RoutedEventArgs e)
+    {
+        AnalysisTextBox.Clear();
+    }
+
+    private void AppendClearMeLog(string message)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (AnalysisTextBox.Text.Length > 0)
+            {
+                AnalysisTextBox.AppendText(Environment.NewLine);
+            }
+
+            AnalysisTextBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}");
+            AnalysisTextBox.ScrollToEnd();
+        });
     }
 
     private async void ClearMe_Click(object sender, RoutedEventArgs e)
@@ -244,7 +271,7 @@ public partial class ClearMeWindow : Window
         _clearMeCts = new CancellationTokenSource();
         try
         {
-            await _clearSingleBios(memory, meRegion, fitCandidates, _clearMeCts.Token);
+            await _clearSingleBios(memory, meRegion, fitCandidates, AppendClearMeLog, _clearMeCts.Token);
             Close();
         }
         catch (OperationCanceledException)
@@ -322,7 +349,7 @@ public partial class ClearMeWindow : Window
         _clearMeCts = new CancellationTokenSource();
         try
         {
-            await _clearDualBios(memory1, memory2, meRegion, fitCandidates, _clearMeCts.Token);
+            await _clearDualBios(memory1, memory2, meRegion, fitCandidates, AppendClearMeLog, _clearMeCts.Token);
             Close();
         }
         catch (OperationCanceledException)

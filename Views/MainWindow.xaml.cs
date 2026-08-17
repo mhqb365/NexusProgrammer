@@ -817,7 +817,7 @@ public partial class MainWindow : Window
 
     private void ClearMe_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync, ClearDualBiosAsync, AnalyzeClearMeBiosAsync, _settings, new ClearMeCandidates([], []), AppendLog)
+        var dialog = new ClearMeWindow(GetMemoryTabOptions(), ClearSingleBiosAsync, ClearDualBiosAsync, AnalyzeClearMeBiosAsync, _settings, new ClearMeCandidates([], []))
         {
             Owner = this
         };
@@ -828,7 +828,7 @@ public partial class MainWindow : Window
     {
         if (memories.Count == 0)
         {
-            return new ClearMeCandidates([], []);
+            return new ClearMeCandidates([], [], "No BIOS memory selected.");
         }
 
         var buffer = memories.Count == 1
@@ -836,27 +836,22 @@ public partial class MainWindow : Window
             : MergeMemoryBuffers(memories);
         if (!MeaAnalyzer.IsLikelyIntelFirmware(buffer))
         {
-            AppendLog("Clear ME analyze skipped: maybe wrong layout or non-Intel image");
-            return new ClearMeCandidates([], []);
+            const string message = "Analyze skipped: the selected image may have the wrong layout or may not contain Intel firmware.";
+            return new ClearMeCandidates([], [], message);
         }
 
-        AppendLog(memories.Count == 1
-            ? $"Clear ME analyze started: {memories[0].Label}"
-            : $"Clear ME analyze started: {string.Join(" + ", memories.Select(memory => memory.Label))}");
-        var stopwatch = Stopwatch.StartNew();
         var analysis = await MeaAnalyzer.AnalyzeAsync(buffer);
-        stopwatch.Stop();
         if (!analysis.Success)
         {
-            AppendLog($"Clear ME analyze failed in {FormatDuration(stopwatch.Elapsed)}: {analysis.Summary}");
-            return new ClearMeCandidates([], []);
+            return new ClearMeCandidates([], [], $"Analyze failed{Environment.NewLine}{analysis.Summary}");
         }
 
-        AppendLog($"Clear ME analyze success in {FormatDuration(stopwatch.Elapsed)}{Environment.NewLine}{analysis.Summary}");
-        AppendLog($"Clear ME target: version {analysis.Info.Version}, SKU {analysis.Info.Sku}, FIT {analysis.Info.Fit}");
         var candidates = ClearMeCandidateFinder.Find(_settings, analysis.Info);
-        AppendLog($"Clear ME candidates: {candidates.MeRegions.Count} ME Region, {candidates.FitTools.Count} FIT");
-        return candidates;
+        return candidates with
+        {
+            AnalysisSummary = $"Analyze success{Environment.NewLine}{analysis.Summary}{Environment.NewLine}{Environment.NewLine}" +
+                              $"Candidates: {candidates.MeRegions.Count} ME Region, {candidates.FitTools.Count} FIT"
+        };
     }
 
     private static byte[] MergeMemoryBuffers(IEnumerable<MemoryBufferOption> memories)
@@ -878,13 +873,13 @@ public partial class MainWindow : Window
             .OrderBy(tab => tab.Index)
             .Select(tab => new MemoryBufferOption(MemoryTabLabel(tab.Index), tab.Buffer.ToArray(), tab.SourceFileName));
 
-    private async Task ClearSingleBiosAsync(MemoryBufferOption memory, string meRegionPath, IReadOnlyList<string> fitPaths, CancellationToken cancellationToken)
+    private async Task ClearSingleBiosAsync(MemoryBufferOption memory, string meRegionPath, IReadOnlyList<string> fitPaths, Action<string> log, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         await RunDialogOperationAsync("Clear ME", null, async _ =>
         {
-            AppendLog($"Clear ME request: {memory.Label}");
-            var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPath, fitPaths, AppendLog, cancellationToken);
+            log($"Clear ME request: {memory.Label}");
+            var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPath, fitPaths, log, cancellationToken);
             stopwatch.Stop();
             var tab = AddBiosTab();
             MemoryTabControl.SelectedItem = tab;
@@ -896,27 +891,30 @@ public partial class MainWindow : Window
 
             RebuildRows();
             UpdateStatus();
-            AppendLog($"Clear ME build completed: {memory.Label} -> {MemoryTabLabel(_activeMemoryTab?.Index ?? 0)} in {FormatDuration(stopwatch.Elapsed)}");
-            AppendLogLines(result.Summary);
-            AppendLog($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
+            log($"Clear ME build completed: {memory.Label} -> {MemoryTabLabel(_activeMemoryTab?.Index ?? 0)} in {FormatDuration(stopwatch.Elapsed)}");
+            foreach (var line in result.Summary.Split(Environment.NewLine))
+            {
+                log(line);
+            }
+            log($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
             var suggestedFileName = ClearMeFileNameFor(memory);
             var postClearOperation = Dispatcher.BeginInvoke(new Action(() =>
             {
                 SaveCurrentBufferWithDialog(suggestedFileName);
             }));
-        }, logCompletion: false);
+        }, logCompletion: false, logger: log);
     }
 
-    private async Task ClearDualBiosAsync(MemoryBufferOption memory1, MemoryBufferOption memory2, string meRegionPath, IReadOnlyList<string> fitPaths, CancellationToken cancellationToken)
+    private async Task ClearDualBiosAsync(MemoryBufferOption memory1, MemoryBufferOption memory2, string meRegionPath, IReadOnlyList<string> fitPaths, Action<string> log, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         await RunDialogOperationAsync("Clear ME", null, async _ =>
         {
-            AppendLog($"Clear ME dual request: {memory1.Label} + {memory2.Label}");
+            log($"Clear ME dual request: {memory1.Label} + {memory2.Label}");
             var merged = new byte[memory1.Buffer.Length + memory2.Buffer.Length];
             Buffer.BlockCopy(memory1.Buffer, 0, merged, 0, memory1.Buffer.Length);
             Buffer.BlockCopy(memory2.Buffer, 0, merged, memory1.Buffer.Length, memory2.Buffer.Length);
-            var result = await ClearMeSingleBiosService.ClearAsync(merged, meRegionPath, fitPaths, AppendLog, cancellationToken);
+            var result = await ClearMeSingleBiosService.ClearAsync(merged, meRegionPath, fitPaths, log, cancellationToken);
             stopwatch.Stop();
             if (result.Bios.Length <= memory1.Buffer.Length)
             {
@@ -928,9 +926,12 @@ public partial class MainWindow : Window
             var tab1 = AddMemoryTabWithBuffer(first, ClearMeFileNameFor(memory1));
             var tab2 = AddMemoryTabWithBuffer(second, ClearMeFileNameFor(memory2));
             MemoryTabControl.SelectedItem = tab1;
-            AppendLog($"Clear ME dual build completed: {memory1.Label} + {memory2.Label} -> {MemoryTabLabel(_memoryTabs[tab1].Index)} + {MemoryTabLabel(_memoryTabs[tab2].Index)} in {FormatDuration(stopwatch.Elapsed)}");
-            AppendLogLines(result.Summary);
-            AppendLog($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
+            log($"Clear ME dual build completed: {memory1.Label} + {memory2.Label} -> {MemoryTabLabel(_memoryTabs[tab1].Index)} + {MemoryTabLabel(_memoryTabs[tab2].Index)} in {FormatDuration(stopwatch.Elapsed)}");
+            foreach (var line in result.Summary.Split(Environment.NewLine))
+            {
+                log(line);
+            }
+            log($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
             var fileName1 = ClearMeFileNameFor(memory1);
             var fileName2 = ClearMeFileNameFor(memory2);
             var postClearOperation = Dispatcher.BeginInvoke(new Action(() =>
@@ -940,7 +941,7 @@ public partial class MainWindow : Window
                 MemoryTabControl.SelectedItem = tab2;
                 SaveCurrentBufferWithDialog(fileName2);
             }));
-        }, logCompletion: false);
+        }, logCompletion: false, logger: log);
     }
 
     private async void Erase_Click(object sender, RoutedEventArgs e)
@@ -2170,8 +2171,14 @@ public partial class MainWindow : Window
     private Task RunOperationAsync(string name, Func<IProgress<int>, Task> operation, bool logLifecycle) =>
         RunOperationAsync(name, null, operation, logLifecycle);
 
-    private async Task RunDialogOperationAsync(string name, int? byteCount, Func<IProgress<int>, Task> operation, bool logCompletion = true)
+    private async Task RunDialogOperationAsync(
+        string name,
+        int? byteCount,
+        Func<IProgress<int>, Task> operation,
+        bool logCompletion = true,
+        Action<string>? logger = null)
     {
+        var writeLog = logger ?? AppendLog;
         if (_isBusy)
         {
             throw new InvalidOperationException("Another operation is already running.");
@@ -2190,7 +2197,7 @@ public partial class MainWindow : Window
             OperationStatusText.Text = "Ready";
             if (logCompletion)
             {
-                AppendLog(byteCount is > 0
+                writeLog(byteCount is > 0
                     ? $"{name} completed: {FormatBytes(byteCount.Value)} in {FormatDuration(stopwatch.Elapsed)} ({FormatSpeed(byteCount.Value, stopwatch.Elapsed)})"
                     : $"{name} completed in {FormatDuration(stopwatch.Elapsed)}");
             }
@@ -2201,14 +2208,14 @@ public partial class MainWindow : Window
         {
             stopwatch.Stop();
             OperationStatusText.Text = "Cancelled";
-            AppendLog($"{name} cancelled after {FormatDuration(stopwatch.Elapsed)}");
+            writeLog($"{name} cancelled after {FormatDuration(stopwatch.Elapsed)}");
             throw;
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
             OperationStatusText.Text = "Error";
-            AppendLog($"ERROR after {FormatDuration(stopwatch.Elapsed)}: {FirstLogLine(ex.Message)}");
+            writeLog($"ERROR after {FormatDuration(stopwatch.Elapsed)}: {FirstLogLine(ex.Message)}");
             PlayOperationSound(name, success: false);
             throw;
         }

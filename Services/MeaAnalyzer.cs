@@ -35,7 +35,7 @@ internal static partial class MeaAnalyzer
         {
             var result = await RunMeaAsync(meaExecutable, $"\"{biosPath}\" -skip -exit -json -out \"{tempRoot}\"", tempRoot, cancellationToken);
 
-            var summary = Summarize(result.Output, tempRoot, biosPath);
+            var summary = Summarize(result.Output, tempRoot, biosPath, buffer);
             var info = ParseInfo(summary);
             return result.ExitCode == 0
                 ? MeaAnalysisResult.Ok(summary, info)
@@ -105,12 +105,12 @@ internal static partial class MeaAnalyzer
         return (process.ExitCode, $"{await outputTask}{Environment.NewLine}{await errorTask}");
     }
 
-    private static string Summarize(string output, string outputDirectory, string biosPath)
+    private static string Summarize(string output, string outputDirectory, string biosPath, byte[] buffer)
     {
         var jsonSummary = SummarizeJson(outputDirectory, biosPath);
         if (!string.IsNullOrWhiteSpace(jsonSummary))
         {
-            return jsonSummary;
+            return AddBiosIdentity(jsonSummary, buffer);
         }
 
         output = AnsiRegex().Replace(output, string.Empty).Replace("\r", string.Empty);
@@ -129,7 +129,8 @@ internal static partial class MeaAnalyzer
         }
 
         var tableSummary = FormatPlatoMeaSummary(lines);
-        return tableSummary.Length > 0 ? tableSummary : FormatLegacyMeaSummary(lines);
+        var meaSummary = tableSummary.Length > 0 ? tableSummary : FormatLegacyMeaSummary(lines);
+        return AddBiosIdentity(meaSummary, buffer);
     }
 
     private static string SummarizeJson(string outputDirectory, string biosPath)
@@ -151,6 +152,7 @@ internal static partial class MeaAnalyzer
             }
 
             JsonElement? managementEngine = null;
+            JsonElement? firmware = null;
             foreach (var fileProperty in document.RootElement.EnumerateObject())
             {
                 if (fileProperty.Value.ValueKind != JsonValueKind.Object ||
@@ -162,6 +164,7 @@ internal static partial class MeaAnalyzer
                 }
 
                 managementEngine = engineArray[0];
+                firmware = fileProperty.Value;
                 break;
             }
 
@@ -172,13 +175,25 @@ internal static partial class MeaAnalyzer
 
             var engine = managementEngine.Value;
             var summary = new List<string>();
+            AddSummaryLine(summary, "Family", JsonValue(engine, "Family"));
             AddSummaryLine(summary, "Version", JsonValue(engine, "Version"));
+            AddSummaryLine(summary, "Release", JsonValue(engine, "Release"));
             AddSummaryLine(summary, "Type", JsonValue(engine, "Type"));
             AddSummaryLine(summary, "SKU", JsonValue(engine, "SKU"));
-            AddSummaryLine(summary, "Family", JsonValue(engine, "Family"));
             AddSummaryLine(summary, "Chipset", JsonValue(engine, "Chipset"));
+            AddSummaryLine(summary, "Chipset Support", JsonValue(engine, "Chipset Support") ?? FindFirstJsonValue(firmware, "Chipset Support"));
+            AddSummaryLine(summary, "TCB SVN", JsonValue(engine, "TCB SVN") ?? JsonValue(engine, "TCB Security Version Number"));
+            AddSummaryLine(summary, "VCN", JsonValue(engine, "VCN") ?? JsonValue(engine, "Version Control Number"));
+            AddSummaryLine(summary, "Production Ready", JsonValue(engine, "Production Ready"));
+            AddSummaryLine(summary, "Workstation Support", JsonValue(engine, "Workstation Support"));
+            AddSummaryLine(summary, "OEM Configuration", JsonValue(engine, "OEM Configuration"));
+            AddSummaryLine(summary, "Date", JsonValue(engine, "Date"));
+            AddSummaryLine(summary, "Size", FormatMeaSize(JsonValue(engine, "Size")));
             AddSummaryLine(summary, "FIT", JsonValue(engine, "Flash Image Tool"));
             AddSummaryLine(summary, "File System", JsonValue(engine, "File System State"));
+            AddSummaryLine(summary, "MEA Database Name", JsonValue(engine, "MEA Database Name"));
+            AddSummaryLine(summary, "MEA Support Status", JsonValue(engine, "MEA Support Status"));
+            AddSummaryLine(summary, "RSA Signature Hash", JsonValue(engine, "RSA Signature Hash"));
             return string.Join(Environment.NewLine, summary);
         }
         catch
@@ -187,10 +202,42 @@ internal static partial class MeaAnalyzer
         }
     }
 
-    private static string? JsonValue(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : null;
+    private static string? JsonValue(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+    }
+
+    private static string? FindFirstJsonValue(JsonElement? element, string propertyName)
+    {
+        if (element is null)
+        {
+            return null;
+        }
+
+        foreach (var property in element.Value.EnumerateObject())
+        {
+            if (property.Value.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var item in property.Value.EnumerateArray())
+            {
+                var value = JsonValue(item, propertyName);
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+        }
+
+        return null;
+    }
 
     private static string FormatLegacyMeaSummary(IReadOnlyList<string> lines)
     {
@@ -206,13 +253,25 @@ internal static partial class MeaAnalyzer
         var cpuGeneration = LastValue(lines, "CPU Generation");
 
         var summary = new List<string>();
+        AddSummaryLine(summary, "Family", family);
         AddSummaryLine(summary, "Version", version);
+        AddSummaryLine(summary, "Release", LastValue(lines, "Release"));
         AddSummaryLine(summary, "Type", type);
         AddSummaryLine(summary, "SKU", sku);
-        AddSummaryLine(summary, "Family", family);
         AddSummaryLine(summary, "Chipset", cpuGeneration);
+        AddSummaryLine(summary, "Chipset Support", LastValue(lines, "Chipset Support"));
+        AddSummaryLine(summary, "TCB SVN", LastValue(lines, "TCB SVN") ?? LastValue(lines, "TCB Security Version Number"));
+        AddSummaryLine(summary, "VCN", LastValue(lines, "VCN") ?? LastValue(lines, "Version Control Number"));
+        AddSummaryLine(summary, "Production Ready", LastValue(lines, "Production Ready"));
+        AddSummaryLine(summary, "Workstation Support", LastValue(lines, "Workstation Support"));
+        AddSummaryLine(summary, "OEM Configuration", LastValue(lines, "OEM Configuration"));
+        AddSummaryLine(summary, "Date", LastValue(lines, "Date"));
+        AddSummaryLine(summary, "Size", FormatMeaSize(LastValue(lines, "Size")));
         AddSummaryLine(summary, "FIT", fit);
         AddSummaryLine(summary, "File System", fileSystem);
+        AddSummaryLine(summary, "MEA Database Name", LastValue(lines, "MEA Database Name"));
+        AddSummaryLine(summary, "MEA Support Status", LastValue(lines, "MEA Support Status"));
+        AddSummaryLine(summary, "RSA Signature Hash", LastValue(lines, "RSA Signature Hash"));
 
         return string.Join(Environment.NewLine, summary);
     }
@@ -278,13 +337,25 @@ internal static partial class MeaAnalyzer
         }
 
         var summary = new List<string>();
+        AddSummaryLine(summary, "Family", GetField(fields, "Family"));
         AddSummaryLine(summary, "Version", version);
+        AddSummaryLine(summary, "Release", GetField(fields, "Release"));
         AddSummaryLine(summary, "Type", GetField(fields, "Type"));
         AddSummaryLine(summary, "SKU", GetField(fields, "SKU"));
-        AddSummaryLine(summary, "Family", GetField(fields, "Family"));
         AddSummaryLine(summary, "Chipset", GetField(fields, "Chipset"));
+        AddSummaryLine(summary, "Chipset Support", GetField(fields, "Chipset Support"));
+        AddSummaryLine(summary, "TCB SVN", GetField(fields, "TCB SVN") ?? GetField(fields, "TCB Security Version Number"));
+        AddSummaryLine(summary, "VCN", GetField(fields, "VCN") ?? GetField(fields, "Version Control Number"));
+        AddSummaryLine(summary, "Production Ready", GetField(fields, "Production Ready"));
+        AddSummaryLine(summary, "Workstation Support", GetField(fields, "Workstation Support"));
+        AddSummaryLine(summary, "OEM Configuration", GetField(fields, "OEM Configuration"));
+        AddSummaryLine(summary, "Date", GetField(fields, "Date"));
+        AddSummaryLine(summary, "Size", FormatMeaSize(GetField(fields, "Size")));
         AddSummaryLine(summary, "FIT", fit);
         AddSummaryLine(summary, "File System", GetField(fields, "File System State"));
+        AddSummaryLine(summary, "MEA Database Name", GetField(fields, "MEA Database Name"));
+        AddSummaryLine(summary, "MEA Support Status", GetField(fields, "MEA Support Status"));
+        AddSummaryLine(summary, "RSA Signature Hash", GetField(fields, "RSA Signature Hash"));
         return string.Join(Environment.NewLine, summary);
     }
 
@@ -313,6 +384,162 @@ internal static partial class MeaAnalyzer
             : "Region";
     }
 
+    private static string AddBiosIdentity(string meaSummary, byte[] buffer)
+    {
+        var (vendor, version) = DetectBiosIdentity(buffer);
+        var summary = new List<string>
+        {
+            $"  BIOS Vendor: {(string.IsNullOrWhiteSpace(vendor) ? "unknown" : vendor)}",
+            $"  BIOS Version: {(string.IsNullOrWhiteSpace(version) ? "Not detected" : version)}"
+        };
+        if (!string.IsNullOrWhiteSpace(meaSummary))
+        {
+            summary.Add(meaSummary);
+        }
+
+        return string.Join(Environment.NewLine, summary);
+    }
+
+    private static (string Vendor, string Version) DetectBiosIdentity(byte[] buffer)
+    {
+        var strings = FirmwareStrings(buffer);
+        var allText = string.Join('\n', strings.Select(item => item.Value)).ToLowerInvariant();
+        var vendor = VendorMarkers.FirstOrDefault(item => item.Markers.Any(allText.Contains)).Vendor ?? string.Empty;
+        if (vendor.Length == 0)
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        var pattern = BiosVersionPatterns[vendor];
+        for (var index = 0; index < strings.Count; index++)
+        {
+            var item = strings[index];
+            if (!BiosVersionLabelRegex().IsMatch(item.Value))
+            {
+                continue;
+            }
+
+            var candidates = new List<string> { CleanBiosVersionCandidate(item.Value) };
+            candidates.AddRange(strings.Skip(index + 1).Take(6)
+                .Where(next => next.Offset - item.Offset <= 512)
+                .Select(next => next.Value));
+            var match = candidates.Select(candidate => pattern.Match(candidate.Trim())).FirstOrDefault(candidate => candidate.Success);
+            if (match?.Success == true)
+            {
+                return (vendor, match.Value);
+            }
+        }
+
+        if (vendor is "Lenovo" or "HP")
+        {
+            var match = strings.Select(item => pattern.Match(item.Value.Trim())).FirstOrDefault(candidate => candidate.Success);
+            if (match?.Success == true)
+            {
+                return (vendor, match.Value);
+            }
+        }
+
+        return (vendor, string.Empty);
+    }
+
+    private static List<(int Offset, string Value)> FirmwareStrings(byte[] buffer)
+    {
+        var values = new List<(int Offset, string Value)>();
+        for (var offset = 0; offset < buffer.Length;)
+        {
+            if (buffer[offset] is >= 0x20 and <= 0x7E)
+            {
+                var start = offset;
+                while (offset < buffer.Length && buffer[offset] is >= 0x20 and <= 0x7E && offset - start < 128)
+                {
+                    offset++;
+                }
+                if (offset - start >= 3)
+                {
+                    values.Add((start, Encoding.ASCII.GetString(buffer, start, offset - start)));
+                }
+            }
+            else
+            {
+                offset++;
+            }
+        }
+
+        for (var alignment = 0; alignment < 2; alignment++)
+        {
+            for (var offset = alignment; offset + 1 < buffer.Length;)
+            {
+                if (buffer[offset] is >= 0x20 and <= 0x7E && buffer[offset + 1] == 0)
+                {
+                    var start = offset;
+                    var chars = new StringBuilder();
+                    while (offset + 1 < buffer.Length && buffer[offset] is >= 0x20 and <= 0x7E && buffer[offset + 1] == 0 && chars.Length < 128)
+                    {
+                        chars.Append((char)buffer[offset]);
+                        offset += 2;
+                    }
+                    if (chars.Length >= 3)
+                    {
+                        values.Add((start, chars.ToString()));
+                    }
+                }
+                else
+                {
+                    offset += 2;
+                }
+            }
+        }
+
+        return values.OrderBy(item => item.Offset).Distinct().ToList();
+    }
+
+    private static string CleanBiosVersionCandidate(string value) =>
+        BiosVersionPrefixRegex().Replace(value, string.Empty).Trim(' ', '\t', '\r', '\n', '\0', ':', ';', ',', '-', '_', '[', ']', '{', '}');
+
+    private static string? FormatMeaSize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        var normalized = value.Trim();
+        if (MeaSizeWithUnitRegex().IsMatch(normalized))
+        {
+            return normalized;
+        }
+
+        try
+        {
+            var bytes = normalized.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                ? Convert.ToInt64(normalized[2..], 16)
+                : Convert.ToInt64(normalized);
+            return $"{bytes / (1024d * 1024d):0.00} MB";
+        }
+        catch
+        {
+            return normalized;
+        }
+    }
+
+    private static readonly (string Vendor, string[] Markers)[] VendorMarkers =
+    [
+        ("Dell", ["dell inc", "dell computer", "optiplex", "latitude", "vostro", "inspiron"]),
+        ("Lenovo", ["lenovo", "thinkpad", "thinkcentre"]),
+        ("HP", ["hewlett-packard", "hewlett packard", "elitebook", "probook", "zbook"]),
+        ("Acer", ["acer incorporated", "acer inc", "aspire", "travelmate"]),
+        ("ASUS", ["asustek", "asus computer"])
+    ];
+
+    private static readonly Dictionary<string, Regex> BiosVersionPatterns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Dell"] = new Regex(@"^(?:A\d{2}|\d{1,2}\.\d{1,2}\.\d{1,3})$", RegexOptions.IgnoreCase),
+        ["Lenovo"] = new Regex(@"^[A-Z0-9]{3,5}ET\d{2}W(?:\s*\([^)]+\))?$", RegexOptions.IgnoreCase),
+        ["HP"] = new Regex(@"^(?:[A-Z0-9]{1,4}\s+Ver\.\s+[A-Z0-9.]+|F\.\d{2}(?:\.\d{2})?)$", RegexOptions.IgnoreCase),
+        ["Acer"] = new Regex(@"^V\d+\.\d+(?:\.\d+)?$", RegexOptions.IgnoreCase),
+        ["ASUS"] = new Regex(@"^(?:[A-Z][A-Z0-9-]{2,20}(?:AS)?\.)?\d{3,4}$", RegexOptions.IgnoreCase)
+    };
+
     private static MeaFirmwareInfo ParseInfo(string summary)
     {
         string? value(string key) => LastValue(summary.Split(Environment.NewLine), key);
@@ -333,7 +560,21 @@ internal static partial class MeaAnalyzer
             type ?? string.Empty,
             chipset ?? string.Empty,
             fit ?? string.Empty,
-            fileSystem ?? string.Empty);
+            fileSystem ?? string.Empty,
+            value("Release") ?? string.Empty,
+            value("TCB SVN") ?? string.Empty,
+            value("VCN") ?? string.Empty,
+            value("Production Ready") ?? string.Empty,
+            value("Workstation Support") ?? string.Empty,
+            value("OEM Configuration") ?? string.Empty,
+            value("Date") ?? string.Empty,
+            value("Size") ?? string.Empty,
+            value("Chipset Support") ?? string.Empty,
+            value("MEA Database Name") ?? string.Empty,
+            value("MEA Support Status") ?? string.Empty,
+            value("RSA Signature Hash") ?? string.Empty,
+            value("BIOS Vendor") ?? string.Empty,
+            value("BIOS Version") ?? string.Empty);
     }
 
     internal static (int Major, int Minor, int Hotfix, int Build) VersionParts(string? value)
@@ -387,6 +628,15 @@ internal static partial class MeaAnalyzer
 
     [GeneratedRegex(@"(?<major>\d+)\.(?<minor>\d+)(?:\.(?<hotfix>\d+))?(?:\.(?<build>\d+))?")]
     private static partial Regex VersionRegex();
+
+    [GeneratedRegex(@"(?i)\bbios\s*(?:version|revision|id)\b")]
+    private static partial Regex BiosVersionLabelRegex();
+
+    [GeneratedRegex(@"(?i)^.*?bios\s*(?:version|revision|id)\s*[:=\-]?\s*")]
+    private static partial Regex BiosVersionPrefixRegex();
+
+    [GeneratedRegex(@"(?i)\s(?:bytes?|[kmgt](?:i)?b)$")]
+    private static partial Regex MeaSizeWithUnitRegex();
 }
 
 internal sealed record MeaAnalysisResult(bool Success, string Summary, MeaFirmwareInfo Info)
@@ -406,4 +656,18 @@ internal sealed record MeaFirmwareInfo(
     string Type = "",
     string Chipset = "",
     string Fit = "",
-    string FileSystem = "");
+    string FileSystem = "",
+    string Release = "",
+    string TcbSvn = "",
+    string Vcn = "",
+    string ProductionReady = "",
+    string WorkstationSupport = "",
+    string OemConfiguration = "",
+    string Date = "",
+    string Size = "",
+    string ChipsetSupport = "",
+    string MeaDatabaseName = "",
+    string MeaSupportStatus = "",
+    string RsaSignatureHash = "",
+    string BiosVendor = "",
+    string BiosVersion = "");

@@ -408,4 +408,7 @@ internal static partial class ClearMeCandidateFinder
     private static partial Regex NonSkuRegex();
 }
 
-public sealed record ClearMeCandidates(IReadOnlyList<string> MeRegions, IReadOnlyList<string> FitTools);
+public sealed record ClearMeCandidates(
+    IReadOnlyList<string> MeRegions,
+    IReadOnlyList<string> FitTools,
+    string AnalysisSummary = "");
