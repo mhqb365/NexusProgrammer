@@ -188,6 +188,26 @@ Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
     public static string FormatVersion(Version version) =>
         $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
 
+    public static string ToPlainTextChangeLog(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var text = WebUtility.HtmlDecode(value);
+        text = Regex.Replace(text, @"(?is)<img\b[^>]*>", string.Empty);
+        text = Regex.Replace(text, @"(?is)<br\s*/?>|</(?:p|div|li|h[1-6]|tr)\s*>", Environment.NewLine);
+        text = Regex.Replace(text, @"(?is)<[^>]+>", string.Empty);
+        text = Regex.Replace(text, @"!\[[^\]]*\]\([^)]*\)", string.Empty);
+        text = Regex.Replace(text, @"\[([^\]]+)\]\([^)]*\)", "$1");
+        text = Regex.Replace(text, @"(?m)^\s{0,3}(?:#{1,6}\s+|[-*+]\s+)", string.Empty);
+        text = Regex.Replace(text, @"[*_`~]", string.Empty);
+        text = Regex.Replace(text, @"[ \t]+(?=\r?$)", string.Empty, RegexOptions.Multiline);
+        text = Regex.Replace(text, @"(?:\r?\n){3,}", Environment.NewLine + Environment.NewLine);
+        return text.Trim();
+    }
+
     private static string EscapePowerShellString(string value) => value.Replace("'", "''");
 
     private static void TryDeleteDirectory(string path)
@@ -226,7 +246,7 @@ internal sealed class UpdateCheckResult
     {
         get
         {
-            var body = Release?.Body?.Trim();
+            var body = UpdateService.ToPlainTextChangeLog(Release?.Body);
             if (string.IsNullOrWhiteSpace(body))
             {
                 return "No changelog provided.";
