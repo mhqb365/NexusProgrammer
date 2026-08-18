@@ -50,8 +50,19 @@ public sealed class RT809FSDKProgrammer : IChipProgrammer
 
     public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress)
     {
-        var actual = await ReadAsync(chip, startAddress, data.Length, progress);
-        return actual.SequenceEqual(data);
+        EnsureSupported(chip, startAddress, data.Length);
+        await using var device = Rt809fDevice.Open();
+        try
+        {
+            // Compare each incoming block inside the SDK. This avoids allocating
+            // and copying a second full-ROM buffer merely to verify it.
+            await device.VerifyAsync((uint)startAddress, data, progress);
+            return true;
+        }
+        catch (RT809F.SDK.RT809FException ex) when (ex.Status == 6)
+        {
+            return false;
+        }
     }
 
     public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress)

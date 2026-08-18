@@ -19,7 +19,8 @@ public sealed class RT809FException(string message, int status, Exception? inner
 public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
 {
     private const uint FtdiId = 0x04036010;
-    private const int ReadBlockSize = 64 * 1024;
+    private const int ReadBlockSize = 256 * 1024;
+    private const int MpsseReadLimit = 64 * 1024;
     private const int PageSize = 256;
     private const int ProgramBatchSize = 63_720;
     private const byte PinsIdle = 0x08, PinsActive = 0x00, PinDirections = 0x0B;
@@ -279,9 +280,21 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
 
     private void ClockRead(Span<byte> output)
     {
-        var count = output.Length - 1;
-        Span<byte> command = stackalloc byte[] { 0x20, (byte)count, (byte)(count >> 8) };
-        WriteAll(command);
+        // Queue several maximum-size MPSSE reads in one USB write. The FTDI
+        // streams their replies while ReadExact drains the receive queue,
+        // avoiding one host/device round-trip for every 64 KiB.
+        var commandCount = (output.Length + MpsseReadLimit - 1) / MpsseReadLimit;
+        Span<byte> commands = stackalloc byte[commandCount * 3];
+        var remaining = output.Length;
+        for (var i = 0; i < commandCount; i++)
+        {
+            var chunk = Math.Min(MpsseReadLimit, remaining) - 1;
+            commands[i * 3] = 0x20;
+            commands[i * 3 + 1] = (byte)chunk;
+            commands[i * 3 + 2] = (byte)(chunk >> 8);
+            remaining -= chunk + 1;
+        }
+        WriteAll(commands);
         ReadExact(output, TimeSpan.FromSeconds(Math.Max(5, output.Length / 250_000.0 + 3)));
     }
 
@@ -392,10 +405,9 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         CheckNative(Native.FT_SetTimeouts(h,5000,5000), "FT_SetTimeouts"); CheckNative(Native.FT_SetLatencyTimer(h,2), "FT_SetLatencyTimer");
         CheckNative(Native.FT_SetBitMode(h,0,0), "FT_SetBitMode(reset)"); CheckNative(Native.FT_SetBitMode(h,0,2), "FT_SetBitMode(MPSSE)");
         Thread.Sleep(50); CheckNative(Native.FT_Purge(h,3), "FT_Purge");
-        // RT809F keeps the FT2232H divide-by-5 clock mode. Use a conservative
-        // 3 MHz clock (12 MHz / 2 / 2) so socket adapters and long test clips
-        // remain reliable. The old divisor 0x003B produced only 100 kHz.
-        byte[] init = [0x86,0x01,0x00,0x82,0xFE,0x09,0x80,PinsIdle,PinDirections];
+        // RT809F uses the FTDI divide-by-5 clock mode. Divisor 0 selects 6 MHz
+        // (12 MHz / ((1 + 0) * 2)), matching the vendor application's clock.
+        byte[] init = [0x86,0x00,0x00,0x82,0xFE,0x09,0x80,PinsIdle,PinDirections];
         unsafe { fixed (byte* p = init) CheckNative(Native.FT_Write(h,(IntPtr)p,(uint)init.Length,out var written),"FT_Write(init)"); }
         Thread.Sleep(2);
         CheckNative(Native.FT_Purge(h, 1), "FT_Purge(RX after init)");
