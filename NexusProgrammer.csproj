@@ -41,10 +41,17 @@
   <ItemGroup>
     <Compile Remove="T48\**\*.cs" />
     <Compile Remove="XGecuT48SDK\**\*.cs" />
+    <Compile Remove="RT809FSDK\**\*.cs" />
+    <Compile Remove="tmp\**\*.cs" />
+    <Page Remove="RT809FSDK\**\*.xaml" />
+    <Page Remove="tmp\**\*.xaml" />
+    <ApplicationDefinition Remove="RT809FSDK\**\*.xaml" />
+    <ApplicationDefinition Remove="tmp\**\*.xaml" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="XGecuT48SDK\src\T48SDK\T48SDK.csproj" />
+    <ProjectReference Include="RT809FSDK\dotnet\RT809F.SDK.csproj" />
   </ItemGroup>
 
   <ItemGroup>

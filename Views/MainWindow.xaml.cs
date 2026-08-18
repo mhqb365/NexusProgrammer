@@ -519,7 +519,7 @@ public partial class MainWindow : Window
 
     private async void ProgrammerMonitorTimer_Tick(object? sender, EventArgs e)
     {
-        if (_isBusy)
+        if (_isBusy || _activeProgrammerKey == "rt809f")
         {
             return;
         }
@@ -539,12 +539,13 @@ public partial class MainWindow : Window
     {
         await Task.Yield();
         var t48Detected = T48SDKProgrammer.CanOpenDevice();
+        var rt809fDetected = RT809FSDKProgrammer.CanOpenDevice();
         var ch347Detected = Ch347NativeProgrammer.IsAvailable && Ch347NativeProgrammer.CanOpenDevice();
         var chDetected = ChNativeProgrammer.IsAvailable && ChNativeProgrammer.CanOpenDevice();
-        ApplyProgrammerDetection(t48Detected, ch347Detected, chDetected, logWhenChanged, forceLog: false);
+        ApplyProgrammerDetection(t48Detected, rt809fDetected, ch347Detected, chDetected, logWhenChanged, forceLog: false);
     }
 
-    private void ApplyProgrammerDetection(bool t48Detected, bool ch347Detected, bool chDetected, bool logWhenChanged, bool forceLog)
+    private void ApplyProgrammerDetection(bool t48Detected, bool rt809fDetected, bool ch347Detected, bool chDetected, bool logWhenChanged, bool forceLog)
     {
         if (t48Detected)
         {
@@ -556,6 +557,20 @@ public partial class MainWindow : Window
             if (forceLog || changed && logWhenChanged)
             {
                 AppendLog("XGecu T48 connected. Active backend: XGecu T48 SDK");
+            }
+            return;
+        }
+
+        if (rt809fDetected)
+        {
+            var changed = _activeProgrammerKey != "rt809f";
+            _programmer = new RT809FSDKProgrammer();
+            _activeProgrammerKey = "rt809f";
+            HardwareStatusText.Text = "RT809F connected";
+            UpdateProgrammerControls();
+            if (forceLog || changed && logWhenChanged)
+            {
+                AppendLog("RT809F connected. Active backend: RT809F SDK");
             }
             return;
         }
