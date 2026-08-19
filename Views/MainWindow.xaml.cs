@@ -519,7 +519,7 @@ public partial class MainWindow : Window
 
     private async void ProgrammerMonitorTimer_Tick(object? sender, EventArgs e)
     {
-        if (_isBusy || _activeProgrammerKey == "rt809f")
+        if (_isBusy)
         {
             return;
         }
