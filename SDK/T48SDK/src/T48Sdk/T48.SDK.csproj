@@ -5,8 +5,8 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Platforms>AnyCPU;x64;x86</Platforms>
-    <AssemblyName>T48SDK</AssemblyName>
-    <RootNamespace>T48SDK</RootNamespace>
+    <AssemblyName>T48.SDK</AssemblyName>
+    <RootNamespace>T48Sdk</RootNamespace>
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <Title>XGecu T48 SDK</Title>

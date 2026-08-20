@@ -37,4 +37,38 @@ public sealed record SearchHit(int Offset, int Length, string OffsetText, string
 
 public sealed record WindowsKeyCandidate(string Method, int Offset, string Key, int Length, string Description);
 
+public sealed class ProgrammerOption : System.ComponentModel.INotifyPropertyChanged
+{
+    private bool _isConnected;
 
+    public ProgrammerOption(string key, string name)
+    {
+        Key = key;
+        Name = name;
+    }
+
+    public string Key { get; }
+    public string Name { get; }
+
+    public bool IsConnected
+    {
+        get => _isConnected;
+        set
+        {
+            if (_isConnected != value)
+            {
+                _isConnected = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsConnected)));
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(DisplayText)));
+            }
+        }
+    }
+
+    public string DisplayText => Key == "auto" 
+        ? Name 
+        : $"{Name} ({(IsConnected ? "Connected" : "Not connected")})";
+
+    public override string ToString() => DisplayText;
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+}

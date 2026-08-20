@@ -52,6 +52,14 @@ public partial class MainWindow : Window
     private readonly List<ChipProfile> _chips = [];
     private readonly Dictionary<TabItem, MemoryTabState> _memoryTabs = [];
 
+    private readonly List<ProgrammerOption> _programmerOptions =
+    [
+        new("auto", "Auto Detect"),
+        new("t48", "XGecu T48"),
+        new("rt809f", "RT809F"),
+        new("ch347", "CH347"),
+        new("ch341", "CH341")
+    ];
     private List<IcCandidate> _icCatalog = [];
     private readonly DispatcherTimer _programmerMonitorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private AppSettings _settings = AppSettingsService.Load();
@@ -106,6 +114,10 @@ public partial class MainWindow : Window
 
     private void LoadControls()
     {
+        ProgrammerSelectorCombo.ItemsSource = _programmerOptions;
+        ProgrammerSelectorCombo.DisplayMemberPath = nameof(ProgrammerOption.DisplayText);
+        ProgrammerSelectorCombo.SelectedIndex = 0;
+
         ChipCombo.ItemsSource = _chips;
         ChipCombo.DisplayMemberPath = nameof(ChipProfile.Name);
         ChipCombo.SelectedIndex = 0;
@@ -535,82 +547,131 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ProbeProgrammerAsync(bool logWhenChanged)
+    private async void ProgrammerSelectorCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ProgrammerSelectorCombo.SelectedItem is not ProgrammerOption)
+        {
+            return;
+        }
+
+        await ProbeProgrammerAsync(logWhenChanged: true, forceLog: true);
+    }
+
+    private async Task ProbeProgrammerAsync(bool logWhenChanged, bool forceLog = false)
     {
         await Task.Yield();
         var t48Detected = T48SDKProgrammer.CanOpenDevice();
         var rt809fDetected = RT809FSDKProgrammer.CanOpenDevice();
         var ch347Detected = Ch347NativeProgrammer.IsAvailable && Ch347NativeProgrammer.CanOpenDevice();
         var chDetected = ChNativeProgrammer.IsAvailable && ChNativeProgrammer.CanOpenDevice();
-        ApplyProgrammerDetection(t48Detected, rt809fDetected, ch347Detected, chDetected, logWhenChanged, forceLog: false);
+
+        UpdateProgrammerOptionStates(t48Detected, rt809fDetected, ch347Detected, chDetected);
+        ApplyProgrammerDetection(t48Detected, rt809fDetected, ch347Detected, chDetected, logWhenChanged, forceLog);
+    }
+
+    private void UpdateProgrammerOptionStates(bool t48Detected, bool rt809fDetected, bool ch347Detected, bool chDetected)
+    {
+        foreach (var opt in _programmerOptions)
+        {
+            opt.IsConnected = opt.Key switch
+            {
+                "t48" => t48Detected,
+                "rt809f" => rt809fDetected,
+                "ch347" => ch347Detected,
+                "ch341" => chDetected,
+                _ => true
+            };
+        }
     }
 
     private void ApplyProgrammerDetection(bool t48Detected, bool rt809fDetected, bool ch347Detected, bool chDetected, bool logWhenChanged, bool forceLog)
     {
-        if (t48Detected)
-        {
-            var changed = _activeProgrammerKey != "t48";
-            _programmer = new T48SDKProgrammer();
-            _activeProgrammerKey = "t48";
-            HardwareStatusText.Text = "XGecu T48 connected";
-            UpdateProgrammerControls();
-            if (forceLog || changed && logWhenChanged)
-            {
-                AppendLog("XGecu T48 connected. Active backend: XGecu T48 SDK");
-            }
-            return;
-        }
+        var selectedMode = (ProgrammerSelectorCombo?.SelectedItem as ProgrammerOption)?.Key ?? "auto";
 
-        if (rt809fDetected)
+        if (selectedMode == "auto")
         {
-            var changed = _activeProgrammerKey != "rt809f";
-            _programmer = new RT809FSDKProgrammer();
-            _activeProgrammerKey = "rt809f";
-            HardwareStatusText.Text = "RT809F connected";
-            UpdateProgrammerControls();
-            if (forceLog || changed && logWhenChanged)
+            if (t48Detected)
             {
-                AppendLog("RT809F connected. Active backend: RT809F SDK");
+                SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", "XGecu T48 connected. Active backend: XGecu T48 SDK", logWhenChanged, forceLog);
+                return;
             }
-            return;
-        }
 
-        if (ch347Detected)
-        {
-            var changed = _activeProgrammerKey != "ch347";
-            _programmer = new Ch347NativeProgrammer();
-            _activeProgrammerKey = "ch347";
-            HardwareStatusText.Text = "CH347 connected";
-            UpdateProgrammerControls();
-            if (forceLog || changed && logWhenChanged)
+            if (rt809fDetected)
             {
-                AppendLog("CH347 connected. Active backend: CH347 native DLL");
+                SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", "RT809F connected. Active backend: RT809F SDK", logWhenChanged, forceLog);
+                return;
             }
-            return;
-        }
 
-        if (chDetected)
-        {
-            var changed = _activeProgrammerKey != "ch341";
-            _programmer = new ChNativeProgrammer();
-            _activeProgrammerKey = "ch341";
-            HardwareStatusText.Text = "CH341 connected";
-            UpdateProgrammerControls();
-            if (forceLog || changed && logWhenChanged)
+            if (ch347Detected)
             {
-                AppendLog("CH341 connected. Active backend: CH341 native DLL");
+                SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", "CH347 connected. Active backend: CH347 native DLL", logWhenChanged, forceLog);
+                return;
             }
-            return;
+
+            if (chDetected)
+            {
+                SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", "CH341 connected. Active backend: CH341 native DLL", logWhenChanged, forceLog);
+                return;
+            }
+        }
+        else
+        {
+            switch (selectedMode)
+            {
+                case "t48":
+                    if (t48Detected)
+                    {
+                        SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", "XGecu T48 selected & connected. Active backend: XGecu T48 SDK", logWhenChanged, forceLog);
+                        return;
+                    }
+                    break;
+                case "rt809f":
+                    if (rt809fDetected)
+                    {
+                        SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", "RT809F selected & connected. Active backend: RT809F SDK", logWhenChanged, forceLog);
+                        return;
+                    }
+                    break;
+                case "ch347":
+                    if (ch347Detected)
+                    {
+                        SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", "CH347 selected & connected. Active backend: CH347 native DLL", logWhenChanged, forceLog);
+                        return;
+                    }
+                    break;
+                case "ch341":
+                    if (chDetected)
+                    {
+                        SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", "CH341 selected & connected. Active backend: CH341 native DLL", logWhenChanged, forceLog);
+                        return;
+                    }
+                    break;
+            }
         }
 
         var wasConnected = _activeProgrammerKey != "none";
         _programmer = new MockProgrammer();
         _activeProgrammerKey = "none";
-        HardwareStatusText.Text = "Programmer disconnected";
+        HardwareStatusText.Text = selectedMode == "auto" 
+            ? "Programmer disconnected" 
+            : $"{_programmerOptions.FirstOrDefault(x => x.Key == selectedMode)?.Name ?? "Programmer"} disconnected";
         UpdateProgrammerControls();
         if (forceLog || wasConnected && logWhenChanged)
         {
-            AppendLog("Programmer disconnected");
+            AppendLog(HardwareStatusText.Text);
+        }
+    }
+
+    private void SetConnectedProgrammer(string key, IChipProgrammer programmer, string statusText, string logMessage, bool logWhenChanged, bool forceLog)
+    {
+        var changed = _activeProgrammerKey != key;
+        _programmer = programmer;
+        _activeProgrammerKey = key;
+        HardwareStatusText.Text = statusText;
+        UpdateProgrammerControls();
+        if (forceLog || changed && logWhenChanged)
+        {
+            AppendLog(logMessage);
         }
     }
 

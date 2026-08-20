@@ -8,7 +8,7 @@
     <Authors>mhqb365.com</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/mhqb365/NexusProgrammer</RepositoryUrl>
-    <Version>1.1.3.8</Version>
+    <Version>1.1.3.9</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
@@ -49,8 +49,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="SDK\XGecuT48SDK\src\T48SDK\T48SDK.csproj" />
-    <ProjectReference Include="SDK\RT809FSDK\dotnet\RT809F.SDK.csproj" />
+    <ProjectReference Include="SDK\T48SDK\src\T48Sdk\T48.SDK.csproj" />
+    <ProjectReference Include="SDK\RT809FSDK\src\RT809F.SDK.csproj" />
   </ItemGroup>
 
   <ItemGroup>

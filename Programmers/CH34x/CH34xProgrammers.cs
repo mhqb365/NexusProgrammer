@@ -22,14 +22,29 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
     public static bool CanOpenDevice()
     {
+        if (!WchUsbDeviceDetector.HasPresentDevice("VID_1A86", "PID_55DA", "PID_55DB"))
+        {
+            return false;
+        }
+
         var handle = NativeMethods.CH347OpenDevice(DeviceIndex);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
             return false;
         }
 
-        NativeMethods.CH347CloseDevice(DeviceIndex);
-        return true;
+        try
+        {
+            return NativeMethods.CH347SPI_Init(DeviceIndex, in SpiConfig.Default);
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            NativeMethods.CH347CloseDevice(DeviceIndex);
+        }
     }
 
     public async Task<bool> DetectAsync(IProgress<int> progress)
@@ -43,9 +58,16 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             return false;
         }
 
-        NativeMethods.CH347CloseDevice(DeviceIndex);
-        progress.Report(100);
-        return true;
+        try
+        {
+            var ok = NativeMethods.CH347SPI_Init(DeviceIndex, in SpiConfig.Default);
+            progress.Report(100);
+            return ok;
+        }
+        finally
+        {
+            NativeMethods.CH347CloseDevice(DeviceIndex);
+        }
     }
 
     public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(() =>
@@ -556,14 +578,29 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
     public static bool CanOpenDevice()
     {
+        if (!WchUsbDeviceDetector.HasPresentDevice("VID_1A86", "PID_5512"))
+        {
+            return false;
+        }
+
         var handle = NativeMethods.CHOpenDevice(DeviceIndex);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
             return false;
         }
 
-        NativeMethods.CHCloseDevice(DeviceIndex);
-        return true;
+        try
+        {
+            return NativeMethods.CHSetStream(DeviceIndex, StreamMode);
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            NativeMethods.CHCloseDevice(DeviceIndex);
+        }
     }
 
     public async Task<bool> DetectAsync(IProgress<int> progress)
@@ -942,6 +979,9 @@ public sealed class ChNativeProgrammer : IChipProgrammer
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CHCloseDevice(int index);
 
+        [DllImport(ChNativeDll, EntryPoint = "CH" + "341GetVerIC", CallingConvention = CallingConvention.Winapi)]
+        public static extern uint CHGetVerIC(int index);
+
         [DllImport(ChNativeDll, EntryPoint = "CH" + "341SetStream", CallingConvention = CallingConvention.Winapi)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CHSetStream(int index, uint mode);
@@ -953,6 +993,123 @@ public sealed class ChNativeProgrammer : IChipProgrammer
         [DllImport(ChNativeDll, EntryPoint = "CH" + "341StreamI2C", CallingConvention = CallingConvention.Winapi)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CHStreamI2C(int index, uint writeLength, byte[] writeBuffer, uint readLength, byte[] readBuffer);
+    }
+}
+
+internal static class WchUsbDeviceDetector
+{
+    private const uint DigcfPresent = 0x00000002;
+    private const uint DigcfAllClasses = 0x00000004;
+    private const uint SpdrpHardwareId = 0x00000001;
+    private static readonly IntPtr InvalidHandleValue = new(-1);
+
+    public static bool HasPresentDevice(string vid, params string[] pids)
+    {
+        var hardwareIds = EnumeratePresentHardwareIds();
+        return hardwareIds.Any(id =>
+            id.Contains(vid, StringComparison.OrdinalIgnoreCase) &&
+            pids.Any(pid => id.Contains(pid, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static IEnumerable<string> EnumeratePresentHardwareIds()
+    {
+        var deviceInfoSet = NativeMethods.SetupDiGetClassDevs(
+            IntPtr.Zero,
+            null,
+            IntPtr.Zero,
+            DigcfPresent | DigcfAllClasses);
+        if (deviceInfoSet == InvalidHandleValue)
+        {
+            yield break;
+        }
+
+        try
+        {
+            for (uint index = 0; ; index++)
+            {
+                var data = new SpDevInfoData
+                {
+                    cbSize = Marshal.SizeOf<SpDevInfoData>()
+                };
+                if (!NativeMethods.SetupDiEnumDeviceInfo(deviceInfoSet, index, ref data))
+                {
+                    yield break;
+                }
+
+                foreach (var hardwareId in GetHardwareIds(deviceInfoSet, data))
+                {
+                    yield return hardwareId;
+                }
+            }
+        }
+        finally
+        {
+            NativeMethods.SetupDiDestroyDeviceInfoList(deviceInfoSet);
+        }
+    }
+
+    private static IEnumerable<string> GetHardwareIds(IntPtr deviceInfoSet, SpDevInfoData data)
+    {
+        var buffer = new byte[1024];
+        if (!NativeMethods.SetupDiGetDeviceRegistryProperty(
+            deviceInfoSet,
+            ref data,
+            SpdrpHardwareId,
+            out _,
+            buffer,
+            (uint)buffer.Length,
+            out var requiredSize))
+        {
+            yield break;
+        }
+
+        var length = Math.Min(buffer.Length, checked((int)requiredSize));
+        var text = System.Text.Encoding.Unicode.GetString(buffer, 0, length).TrimEnd('\0');
+        foreach (var value in text.Split('\0', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            yield return value;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SpDevInfoData
+    {
+        public int cbSize;
+        public Guid classGuid;
+        public uint devInst;
+        public IntPtr reserved;
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern IntPtr SetupDiGetClassDevs(
+            IntPtr classGuid,
+            string? enumerator,
+            IntPtr hwndParent,
+            uint flags);
+
+        [DllImport("setupapi.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetupDiEnumDeviceInfo(
+            IntPtr deviceInfoSet,
+            uint memberIndex,
+            ref SpDevInfoData deviceInfoData);
+
+        [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetupDiGetDeviceRegistryProperty(
+            IntPtr deviceInfoSet,
+            ref SpDevInfoData deviceInfoData,
+            uint property,
+            out uint propertyRegDataType,
+            byte[] propertyBuffer,
+            uint propertyBufferSize,
+            out uint requiredSize);
+
+        [DllImport("setupapi.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetupDiDestroyDeviceInfoList(IntPtr deviceInfoSet);
     }
 }
 

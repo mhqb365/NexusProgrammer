@@ -21,7 +21,7 @@ The SDK supports SPI 25xx devices up to 16 MiB. It uses a conservative 3 MHz clo
 ## Library
 
 ```xml
-<ProjectReference Include="path/to/RT809FSDK/dotnet/RT809F.SDK.csproj" />
+<ProjectReference Include="path/to/RT809FSDK/src/RT809F.SDK.csproj" />
 ```
 
 ```csharp
@@ -35,10 +35,10 @@ var data = await programmer.ReadAsync(0, 16 * 1024 * 1024);
 ## CLI
 
 ```powershell
-dotnet run --project dotnet/samples/RT809F.Cli -- detect
-dotnet run --project dotnet/samples/RT809F.Cli -- id
-dotnet run --project dotnet/samples/RT809F.Cli -- read backup.bin 0x1000000
-dotnet run --project dotnet/samples/RT809F.Cli -- verify backup.bin
+dotnet run --project src/samples/RT809F.Cli -- detect
+dotnet run --project src/samples/RT809F.Cli -- id
+dotnet run --project src/samples/RT809F.Cli -- read backup.bin 0x1000000
+dotnet run --project src/samples/RT809F.Cli -- verify backup.bin
 ```
 
 Erase and write require `--yes`. Run the CLI without arguments for all commands.
