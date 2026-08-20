@@ -9,7 +9,7 @@
 
 English | [Tiếng Việt](#tiếng-việt)
 
-Nexus Programmer is a BIOS ROM programming application for CH341, CH347, XGecu T48, and RT809F
+Flashing BIOS application for CH341, CH347, XGecu T48 and RT809F
 
 ## Features
 
@@ -31,6 +31,14 @@ Nexus Programmer is a BIOS ROM programming application for CH341, CH347, XGecu T
 
 You can download the latest release from the [Releases page](https://github.com/mhqb365/NexusProgrammer/releases)
 
+## Shortcuts
+
+- Ctrl + Shift + N: Open a new application window
+- Ctrl + N: Create a new ROM buffer
+- Ctrl + O: Open a ROM file
+- Ctrl + S: Save a ROM file
+- Ctrl + Q: Exit the application
+
 ## License
 
 MIT License
@@ -43,7 +51,7 @@ See `THIRD_PARTY_NOTICES.md` and `flashrom-data/COPYING.rst` for more informatio
 
 [English](#english) | Tiếng Việt
 
-Nexus Programmer là ứng dụng nạp ROM BIOS dành cho CH341, CH347, XGecu T48 và RT809F
+Ứng dụng nạp BIOS cho CH341, CH347, XGecu T48 và RT809F
 
 ## Tính năng
 
@@ -64,6 +72,14 @@ Nexus Programmer là ứng dụng nạp ROM BIOS dành cho CH341, CH347, XGecu T
 ## Tải về`
 
 Bạn có thể tải bản phát hành mới nhất tại [trang Releases](https://github.com/mhqb365/NexusProgrammer/releases)
+
+## Phím tắt
+
+- Ctrl + Shift + N: Mở cửa sổ ứng dụng mới
+- Ctrl + N: Tạo buffer ROM mới
+- Ctrl + O: Mở file ROM
+- Ctrl + S: Lưu file ROM
+- Ctrl + Q: Thoát ứng dụng
 
 ## Giấy phép
 

@@ -5,10 +5,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Media;
 using System.Runtime.CompilerServices;
+using System.Globalization;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Windows.Media;
@@ -19,6 +21,31 @@ public partial class MainWindow : Window
 {
     private const string AppName = "Nexus Programmer";
     private const string ProjectUrl = "https://github.com/mhqb365/NexusProgrammer";
+    public static readonly RoutedUICommand NewBufferCommand = new(
+        "New",
+        nameof(NewBufferCommand),
+        typeof(MainWindow),
+        [new KeyGesture(Key.N, ModifierKeys.Control)]);
+    public static readonly RoutedUICommand NewWindowCommand = new(
+        "New Window",
+        nameof(NewWindowCommand),
+        typeof(MainWindow),
+        [new KeyGesture(Key.N, ModifierKeys.Control | ModifierKeys.Shift)]);
+    public static readonly RoutedUICommand OpenFileCommand = new(
+        "Open",
+        nameof(OpenFileCommand),
+        typeof(MainWindow),
+        [new KeyGesture(Key.O, ModifierKeys.Control)]);
+    public static readonly RoutedUICommand SaveFileCommand = new(
+        "Save",
+        nameof(SaveFileCommand),
+        typeof(MainWindow),
+        [new KeyGesture(Key.S, ModifierKeys.Control)]);
+    public static readonly RoutedUICommand ExitCommand = new(
+        "Exit",
+        nameof(ExitCommand),
+        typeof(MainWindow),
+        [new KeyGesture(Key.Q, ModifierKeys.Control)]);
     private static readonly string SuccessSoundPath = Path.Combine(AppContext.BaseDirectory, "Assets", "success.wav");
     private const int MaxHexPreviewRows = 4096;
     private const int BytesPerHexRow = 16;
@@ -54,7 +81,7 @@ public partial class MainWindow : Window
 
     private readonly List<ProgrammerOption> _programmerOptions =
     [
-        new("auto", "Auto Detect"),
+        new("auto", "Auto"),
         new("t48", "XGecu T48"),
         new("rt809f", "RT809F"),
         new("ch347", "CH347"),
@@ -79,6 +106,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        CommandBindings.Add(new CommandBinding(NewBufferCommand, NewBufferCommand_Executed));
+        CommandBindings.Add(new CommandBinding(NewWindowCommand, NewWindowCommand_Executed));
+        CommandBindings.Add(new CommandBinding(OpenFileCommand, OpenFileCommand_Executed));
+        CommandBindings.Add(new CommandBinding(SaveFileCommand, SaveFileCommand_Executed));
+        CommandBindings.Add(new CommandBinding(ExitCommand, ExitCommand_Executed));
         _icCatalog = IcCatalogLoader.LoadSpiCatalog();
         _chips.AddRange(_icCatalog.Select(x => x.Profile));
         if (_chips.Count == 0)
@@ -115,7 +147,6 @@ public partial class MainWindow : Window
     private void LoadControls()
     {
         ProgrammerSelectorCombo.ItemsSource = _programmerOptions;
-        ProgrammerSelectorCombo.DisplayMemberPath = nameof(ProgrammerOption.DisplayText);
         ProgrammerSelectorCombo.SelectedIndex = 0;
 
         ChipCombo.ItemsSource = _chips;
@@ -1928,6 +1959,26 @@ public partial class MainWindow : Window
         }
     }
 
+    private void NewBufferCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        FillFF_Click(sender, e);
+    }
+
+    private void OpenFileCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        LoadFile_Click(sender, e);
+    }
+
+    private void SaveFileCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        SaveFile_Click(sender, e);
+    }
+
+    private void ExitCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        Exit_Click(sender, e);
+    }
+
     private void HexEditor_DragOver(object sender, DragEventArgs e)
     {
         e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop)
@@ -2218,6 +2269,22 @@ public partial class MainWindow : Window
 
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();
 
+    private void NewWindow_Click(object sender, RoutedEventArgs e)
+    {
+        OpenNewWindow();
+    }
+
+    private void NewWindowCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        OpenNewWindow();
+    }
+
+    private static void OpenNewWindow()
+    {
+        var window = new MainWindow();
+        window.Show();
+    }
+
     private void About_Click(object sender, RoutedEventArgs e)
     {
         Process.Start(new ProcessStartInfo(ProjectUrl)
@@ -2338,7 +2405,11 @@ public partial class MainWindow : Window
         {
             stopwatch.Stop();
             OperationStatusText.Text = "Error";
-            AppendLog($"ERROR after {FormatDuration(stopwatch.Elapsed)}: {FirstLogLine(ex.Message)}");
+            if (ex is not LoggedOperationException)
+            {
+                AppendLog($"ERROR after {FormatDuration(stopwatch.Elapsed)}: {FirstLogLine(ex.Message)}");
+            }
+
             PlayOperationSound(name, success: false);
         }
         finally
@@ -2438,12 +2509,7 @@ public partial class MainWindow : Window
         if (IsInvalidJedecId(id))
         {
             AppendLog($"Invalid IC ID {idText}. Check IC contact, orientation, pinout, adapter voltage, and clip wiring.");
-            MessageBox.Show(
-                $"Invalid IC ID {idText}.\n\nCheck IC contact, orientation, pinout, adapter voltage, and clip wiring.",
-                "Detect IC",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
+            throw new LoggedOperationException();
         }
 
         var candidates = FindCandidatesByJedecId(id).ToList();
@@ -2676,6 +2742,28 @@ internal sealed class MemoryTabState
     public byte[] Buffer { get; set; }
     public MeaAnalysisResult? MeaAnalysis { get; set; }
     public string SourceFileName { get; set; } = string.Empty;
+}
+
+internal sealed class LoggedOperationException : Exception
+{
+}
+
+public sealed class ProgrammerStatusBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is true ? Brushes.LimeGreen : Brushes.Red;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        Binding.DoNothing;
+}
+
+public sealed class ProgrammerStatusVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is true ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        Binding.DoNothing;
 }
 
 

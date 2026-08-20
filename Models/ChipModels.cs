@@ -59,16 +59,13 @@ public sealed class ProgrammerOption : System.ComponentModel.INotifyPropertyChan
             {
                 _isConnected = value;
                 PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsConnected)));
-                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(DisplayText)));
             }
         }
     }
 
-    public string DisplayText => Key == "auto" 
-        ? Name 
-        : $"{Name} ({(IsConnected ? "Connected" : "Not connected")})";
+    public bool ShowsStatus => Key != "auto";
 
-    public override string ToString() => DisplayText;
+    public override string ToString() => Name;
 
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }

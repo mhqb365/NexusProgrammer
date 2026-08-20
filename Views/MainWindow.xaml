@@ -4,12 +4,26 @@
     xmlns:local="clr-namespace:NexusProgrammer"
     xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
     xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
-    xmlns:sys="clr-namespace:System;assembly=mscorlib" Title="Nexus Programmer" Icon="/Assets/icon.ico"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib" Title="Nexus Programmer"
+    Icon="/Assets/icon.ico"
     Height="620"
     Width="960"
     MinHeight="620" MinWidth="960" FontFamily="Segoe UI" FontSize="13"
     Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource TextBrush}">
+    <Window.InputBindings>
+        <KeyBinding Key="N" Modifiers="Control"
+            Command="{x:Static local:MainWindow.NewBufferCommand}" />
+        <KeyBinding Key="N" Modifiers="Control+Shift"
+            Command="{x:Static local:MainWindow.NewWindowCommand}" />
+        <KeyBinding Key="O" Modifiers="Control"
+            Command="{x:Static local:MainWindow.OpenFileCommand}" />
+        <KeyBinding Key="S" Modifiers="Control"
+            Command="{x:Static local:MainWindow.SaveFileCommand}" />
+        <KeyBinding Key="Q" Modifiers="Control" Command="{x:Static local:MainWindow.ExitCommand}" />
+    </Window.InputBindings>
     <Window.Resources>
+        <local:ProgrammerStatusBrushConverter x:Key="ProgrammerStatusBrushConverter" />
+        <local:ProgrammerStatusVisibilityConverter x:Key="ProgrammerStatusVisibilityConverter" />
         <Style TargetType="Button">
             <Setter Property="Margin" Value="2" />
             <Setter Property="Padding" Value="6,3" />
@@ -275,12 +289,18 @@
             Background="{DynamicResource AppBackgroundBrush}"
             Foreground="{DynamicResource TextBrush}">
             <MenuItem x:Name="FileMenu" Header="_File">
-                <MenuItem x:Name="NewMenuItem" Header="New" Click="FillFF_Click" />
+                <MenuItem x:Name="NewWindowMenuItem" Header="New Window"
+                    InputGestureText="Ctrl+Shift+N" Click="NewWindow_Click" />
                 <Separator />
-                <MenuItem x:Name="OpenMenuItem" Header="Open" Click="LoadFile_Click" />
-                <MenuItem x:Name="SaveMenuItem" Header="Save" Click="SaveFile_Click" />
+                <MenuItem x:Name="NewMenuItem" Header="New" InputGestureText="Ctrl+N"
+                    Click="FillFF_Click" />
+                <MenuItem x:Name="OpenMenuItem" Header="Open" InputGestureText="Ctrl+O"
+                    Click="LoadFile_Click" />
+                <MenuItem x:Name="SaveMenuItem" Header="Save" InputGestureText="Ctrl+S"
+                    Click="SaveFile_Click" />
                 <Separator />
-                <MenuItem x:Name="ExitMenuItem" Header="Exit" Click="Exit_Click" />
+                <MenuItem x:Name="ExitMenuItem" Header="Exit" InputGestureText="Ctrl+Q"
+                    Click="Exit_Click" />
             </MenuItem>
             <MenuItem x:Name="IcMenu" Header="_IC">
                 <MenuItem x:Name="SearchIcMenuItem" Header="Search" Click="SearchIc_Click" />
@@ -417,9 +437,21 @@
                         Margin="0,0,0,6">
                         <StackPanel>
                             <ComboBox x:Name="ProgrammerSelectorCombo" Margin="0,2,0,6"
-                                SelectionChanged="ProgrammerSelectorCombo_SelectionChanged" />
+                                SelectionChanged="ProgrammerSelectorCombo_SelectionChanged">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type local:ProgrammerOption}">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Ellipse Width="8" Height="8" Margin="0,0,6,0"
+                                                Fill="{Binding IsConnected, Converter={StaticResource ProgrammerStatusBrushConverter}}"
+                                                Visibility="{Binding ShowsStatus, Converter={StaticResource ProgrammerStatusVisibilityConverter}}" />
+                                            <TextBlock Text="{Binding Name}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                             <TextBlock x:Name="HardwareStatusText" Height="20"
-                                FontWeight="SemiBold" Text="Programmer disconnected" Margin="0,0,0,0" />
+                                FontWeight="SemiBold" Text="Programmer disconnected"
+                                Margin="0,0,0,0" />
                         </StackPanel>
                     </GroupBox>
 
