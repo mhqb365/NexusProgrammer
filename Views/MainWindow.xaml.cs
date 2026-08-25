@@ -580,7 +580,7 @@ public partial class MainWindow : Window
 
     private async void ProgrammerSelectorCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ProgrammerSelectorCombo.SelectedItem is not ProgrammerOption)
+        if (!IsLoaded || ProgrammerSelectorCombo.SelectedItem is not ProgrammerOption)
         {
             return;
         }
@@ -596,15 +596,16 @@ public partial class MainWindow : Window
         var ch347Detected = Ch347NativeProgrammer.IsAvailable && Ch347NativeProgrammer.CanOpenDevice();
         var chDetected = ChNativeProgrammer.IsAvailable && ChNativeProgrammer.CanOpenDevice();
 
-        UpdateProgrammerOptionStates(t48Detected, rt809fDetected, ch347Detected, chDetected);
+        UpdateProgrammerOptionStates(t48Detected, rt809fDetected, ch347Detected, chDetected, logWhenChanged);
         ApplyProgrammerDetection(t48Detected, rt809fDetected, ch347Detected, chDetected, logWhenChanged, forceLog);
     }
 
-    private void UpdateProgrammerOptionStates(bool t48Detected, bool rt809fDetected, bool ch347Detected, bool chDetected)
+    private void UpdateProgrammerOptionStates(bool t48Detected, bool rt809fDetected, bool ch347Detected, bool chDetected, bool logWhenChanged)
     {
         foreach (var opt in _programmerOptions)
         {
-            opt.IsConnected = opt.Key switch
+            var wasConnected = opt.IsConnected;
+            var isConnected = opt.Key switch
             {
                 "t48" => t48Detected,
                 "rt809f" => rt809fDetected,
@@ -612,6 +613,11 @@ public partial class MainWindow : Window
                 "ch341" => chDetected,
                 _ => true
             };
+            opt.IsConnected = isConnected;
+            if (logWhenChanged && opt.ShowsStatus && wasConnected != isConnected)
+            {
+                AppendLog($"{opt.Name} {(isConnected ? "connected" : "disconnected")}");
+            }
         }
     }
 
@@ -623,25 +629,25 @@ public partial class MainWindow : Window
         {
             if (t48Detected)
             {
-                SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", "XGecu T48 connected. Active backend: XGecu T48 SDK", logWhenChanged, forceLog);
+                SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", logWhenChanged, forceLog);
                 return;
             }
 
             if (rt809fDetected)
             {
-                SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", "RT809F connected. Active backend: RT809F SDK", logWhenChanged, forceLog);
+                SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
                 return;
             }
 
             if (ch347Detected)
             {
-                SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", "CH347 connected. Active backend: CH347 native DLL", logWhenChanged, forceLog);
+                SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", logWhenChanged, forceLog);
                 return;
             }
 
             if (chDetected)
             {
-                SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", "CH341 connected. Active backend: CH341 native DLL", logWhenChanged, forceLog);
+                SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", logWhenChanged, forceLog);
                 return;
             }
         }
@@ -652,57 +658,55 @@ public partial class MainWindow : Window
                 case "t48":
                     if (t48Detected)
                     {
-                        SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", "XGecu T48 selected & connected. Active backend: XGecu T48 SDK", logWhenChanged, forceLog);
+                        SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", logWhenChanged, forceLog);
                         return;
                     }
                     break;
                 case "rt809f":
                     if (rt809fDetected)
                     {
-                        SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", "RT809F selected & connected. Active backend: RT809F SDK", logWhenChanged, forceLog);
+                        SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
                         return;
                     }
                     break;
                 case "ch347":
                     if (ch347Detected)
                     {
-                        SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", "CH347 selected & connected. Active backend: CH347 native DLL", logWhenChanged, forceLog);
+                        SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", logWhenChanged, forceLog);
                         return;
                     }
                     break;
                 case "ch341":
                     if (chDetected)
                     {
-                        SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", "CH341 selected & connected. Active backend: CH341 native DLL", logWhenChanged, forceLog);
+                        SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", logWhenChanged, forceLog);
                         return;
                     }
                     break;
             }
         }
 
-        var wasConnected = _activeProgrammerKey != "none";
         _programmer = new MockProgrammer();
         _activeProgrammerKey = "none";
         HardwareStatusText.Text = selectedMode == "auto" 
             ? "Programmer disconnected" 
             : $"{_programmerOptions.FirstOrDefault(x => x.Key == selectedMode)?.Name ?? "Programmer"} disconnected";
         UpdateProgrammerControls();
-        if (forceLog || wasConnected && logWhenChanged)
+        if (forceLog)
         {
             AppendLog(HardwareStatusText.Text);
         }
     }
 
-    private void SetConnectedProgrammer(string key, IChipProgrammer programmer, string statusText, string logMessage, bool logWhenChanged, bool forceLog)
+    private void SetConnectedProgrammer(string key, IChipProgrammer programmer, string statusText, bool logWhenChanged, bool forceLog)
     {
-        var changed = _activeProgrammerKey != key;
         _programmer = programmer;
         _activeProgrammerKey = key;
         HardwareStatusText.Text = statusText;
         UpdateProgrammerControls();
-        if (forceLog || changed && logWhenChanged)
+        if (forceLog)
         {
-            AppendLog(logMessage);
+            AppendLog(statusText);
         }
     }
 
