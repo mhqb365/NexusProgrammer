@@ -39,7 +39,7 @@ using RT809F.SDK;
 
 using var programmer = RT809FProgrammer.Open();
 var id = programmer.ReadId();
-var data = await programmer.ReadAsync(0, 16 * 1024 * 1024);
+var data = await programmer.ReadAsync(0, 32 * 1024 * 1024);
 ```
 
 ## CLI

@@ -23,6 +23,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
     private const int MpsseReadLimit = 64 * 1024;
     private const int PageSize = 256;
     private const int ProgramBatchSize = 63_720;
+    private const ulong AddressSpaceSize = 0x1_0000_0000UL;
     private const byte PinsIdle = 0x08, PinsActive = 0x00, PinDirections = 0x0B;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private FtdiHandle? _handle;
@@ -154,7 +155,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
                 var page = owned.AsSpan(done, count);
                 if (!skipBlankPages || page.IndexOfAnyExcept((byte)0xFF) >= 0)
                 {
-                    var frameSize = count + 39;
+                    var frameSize = count + ProgramFrameOverhead(current);
                     if (batch.Count > 0 && batch.Count + frameSize > ProgramBatchSize)
                     {
                         FlushProgramBatch(batch, token);
@@ -182,14 +183,19 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         WaitReady(TimeSpan.FromSeconds(10), token);
     }
 
+    private static int ProgramFrameOverhead(uint address) => Uses4ByteAddress(address) ? 40 : 39;
+
     private static void AppendProgramFrame(List<byte> batch, uint address, ReadOnlySpan<byte> page)
     {
         // Captured RT809F page frame: WREN, page program, then GPIO READY wait.
+        var use4ByteAddress = Uses4ByteAddress(address);
+        var commandLength = page.Length + (use4ByteAddress ? 5 : 4);
         batch.AddRange([0x80, PinsActive, PinDirections, 0x11, 0x00, 0x00, 0x06,
                         0x80, PinsIdle, PinDirections,
                         0x80, PinsActive, PinDirections, 0x11,
-                        (byte)(page.Length + 3), (byte)((page.Length + 3) >> 8),
-                        0x02, (byte)(address >> 16), (byte)(address >> 8), (byte)address]);
+                        (byte)(commandLength - 1), (byte)((commandLength - 1) >> 8),
+                        use4ByteAddress ? (byte)0x12 : (byte)0x02]);
+        AppendAddress(batch, address, use4ByteAddress);
         foreach (var value in page) batch.Add(value);
         batch.AddRange([0x80, PinsIdle, PinDirections,
                         0x80, 0x0B, PinDirections,
@@ -232,7 +238,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         var buffer = ArrayPool<byte>.Shared.Rent(Math.Min(ReadBlockSize, length));
         try
         {
-            BeginContinuousRead(address);
+            BeginContinuousRead(address, length);
             var done = 0;
             try
             {
@@ -251,7 +257,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
     private void ReadCore(uint address, Span<byte> output, IProgress<int>? progress, CancellationToken token)
     {
         if (output.IsEmpty) { progress?.Report(100); return; }
-        BeginContinuousRead(address);
+        BeginContinuousRead(address, output.Length);
         var done = 0;
         try
         {
@@ -264,17 +270,19 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         finally { EndContinuousRead(); }
     }
 
-    private void BeginContinuousRead(uint address)
+    private void BeginContinuousRead(uint address, int length)
     {
         // Matches the vendor capture: WREN pulse, then one READ command while CS
         // remains asserted for every following 64 KiB clock block.
+        var use4ByteAddress = Uses4ByteAddress(address, length);
         byte[] command =
         [
             0x80, PinsActive, PinDirections, 0x11, 0x00, 0x00, 0x06,
             0x80, PinsIdle, PinDirections,
-            0x80, PinsActive, PinDirections, 0x11, 0x03, 0x00,
-            0x03, (byte)(address >> 16), (byte)(address >> 8), (byte)address
+            0x80, PinsActive, PinDirections, 0x11, (byte)(use4ByteAddress ? 0x04 : 0x03), 0x00,
+            use4ByteAddress ? (byte)0x13 : (byte)0x03
         ];
+        command = [.. command, .. AddressBytes(address, use4ByteAddress)];
         WriteAll(command);
     }
 
@@ -469,7 +477,29 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
     private static void ValidateRange(uint address, int length)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(length);
-        if (address > 0xFFFFFF || (ulong)address + (uint)length > 0x1000000) throw new ArgumentOutOfRangeException(nameof(address), "Capture currently supports 24-bit addresses (16 MiB). ");
+        if ((ulong)address + (uint)length > AddressSpaceSize) throw new ArgumentOutOfRangeException(nameof(address), "SPI flash range exceeds 32-bit addressing.");
+    }
+
+    private static bool Uses4ByteAddress(uint address) => address > 0xFFFFFF;
+
+    private static bool Uses4ByteAddress(uint address, int length) =>
+        address > 0xFFFFFF || (ulong)address + (uint)length > 0x1000000UL;
+
+    private static byte[] AddressBytes(uint address, bool use4ByteAddress) =>
+        use4ByteAddress
+            ? [(byte)(address >> 24), (byte)(address >> 16), (byte)(address >> 8), (byte)address]
+            : [(byte)(address >> 16), (byte)(address >> 8), (byte)address];
+
+    private static void AppendAddress(List<byte> batch, uint address, bool use4ByteAddress)
+    {
+        if (use4ByteAddress)
+        {
+            batch.Add((byte)(address >> 24));
+        }
+
+        batch.Add((byte)(address >> 16));
+        batch.Add((byte)(address >> 8));
+        batch.Add((byte)address);
     }
 
     private static string Ascii(byte[] value) { var end = Array.IndexOf(value,(byte)0); return System.Text.Encoding.ASCII.GetString(value,0,end < 0 ? value.Length : end); }

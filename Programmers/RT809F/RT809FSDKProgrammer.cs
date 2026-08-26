@@ -5,8 +5,6 @@ namespace NexusProgrammer;
 
 public sealed class RT809FSDKProgrammer : IChipProgrammer
 {
-    private const int MaximumAddressSpace = 0x1000000;
-
     public string Name => "RT809F SDK";
 
     public static bool CanOpenDevice() => Rt809fDevice.IsConnected();
@@ -21,7 +19,7 @@ public sealed class RT809FSDKProgrammer : IChipProgrammer
 
     public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(() =>
     {
-        EnsureSupported(chip, 0, 0);
+        EnsureSpi25(chip);
         using var device = Rt809fDevice.Open();
         progress.Report(50);
         var id = device.ReadId();
@@ -67,7 +65,7 @@ public sealed class RT809FSDKProgrammer : IChipProgrammer
 
     public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress)
     {
-        EnsureSupported(chip, 0, 0);
+        EnsureSpi25(chip);
         progress.Report(100);
         return Task.CompletedTask;
     }
@@ -81,17 +79,20 @@ public sealed class RT809FSDKProgrammer : IChipProgrammer
 
     private static void EnsureSupported(ChipProfile chip, int startAddress, int length)
     {
+        EnsureSpi25(chip);
+
+        if (startAddress < 0 || length < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(startAddress), "RT809F SDK address and length must be non-negative.");
+        }
+    }
+
+    private static void EnsureSpi25(ChipProfile chip)
+    {
         if (!string.Equals(chip.Protocol, "SPI", StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(chip.CommandSet, "25xx", StringComparison.OrdinalIgnoreCase))
         {
             throw new NotSupportedException("RT809F SDK backend currently supports SPI 25xx flash only.");
-        }
-
-        if (startAddress < 0 || length < 0 ||
-            (long)startAddress + length > MaximumAddressSpace ||
-            chip.SizeBytes > MaximumAddressSpace)
-        {
-            throw new NotSupportedException("RT809F SDK currently supports 24-bit addressing up to 16 MiB only.");
         }
     }
 
