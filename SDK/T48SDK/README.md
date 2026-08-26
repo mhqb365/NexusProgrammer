@@ -1,11 +1,14 @@
 # XGecu T48 SDK
 
-`XGecu T48 SDK` is a Windows/.NET SDK for talking directly to an XGecu T48 programmer
-through WinUSB. It was built from USB captures of the official Xgpro software
-and currently targets SPI 25-series flash workflows tested with a W25Q128-class
-chip.
+SDK to control XGecu T48 Programmer SPI-NOR through WinUSB.
+
+This is an unofficial, community-maintained project. It is not affiliated with
+or endorsed by XGecu.
 
 ## Status
+
+Experimental. The SDK is useful for protocol work and controlled hardware
+testing, but the public API and protocol coverage may change.
 
 Working on real hardware:
 
@@ -69,7 +72,7 @@ T48SDK/
 ## Build
 
 ```powershell
-dotnet build ".\T48SDK\T48SDK.sln"
+dotnet build ".\T48SDK\XGecuT48SDK.sln"
 ```
 
 Built DLLs:
@@ -303,3 +306,15 @@ python ".\T48SDK\tools\summarize-captures.py"
 
 Erase and write are destructive. Build UI-level confirmations around them.
 For early testing, use a sacrificial chip and always keep a readback backup.
+
+## Contributing
+
+Issues and pull requests are welcome. Please include the T48 driver version,
+chip model, JEDEC ID, command used, and whether the workflow touched destructive
+operations.
+
+See `CONTRIBUTING.md` for development notes.
+
+## License
+
+MIT. See `LICENSE`.

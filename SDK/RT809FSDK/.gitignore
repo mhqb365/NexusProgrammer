@@ -15,11 +15,6 @@
 *.tmp
 *.temp
 
-# Flash dumps and captures
-*.bin
-*.pcap
-*.pcapng
-
 # Test and coverage output
 TestResults/
 coverage/
@@ -31,6 +26,6 @@ coverage/
 *.snupkg
 packages/
 
-# Python helper cache
-__pycache__/
-*.pyc
+# Native/vendor binaries should be obtained from their official distributor.
+ftd2xx.dll
+ftd2xx64.dll

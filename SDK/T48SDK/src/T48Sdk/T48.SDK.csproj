@@ -12,5 +12,10 @@
     <Title>XGecu T48 SDK</Title>
     <Product>XGecu T48 SDK</Product>
     <Description>Low-level WinUSB SDK foundation for XGecu T48 programmers.</Description>
+    <Authors>mhqb365</Authors>
+    <PackageProjectUrl>https://github.com/mhqb365/T48SDK</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mhqb365/T48SDK</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 </Project>

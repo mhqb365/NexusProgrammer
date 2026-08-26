@@ -1,6 +1,9 @@
-# RT809F .NET SDK
+# RT809F SDK
 
-Managed .NET 8 SDK used by Nexus Programmer to control RT809F SPI-NOR through FTDI D2XX.
+SDK to control RT809F Programmer SPI-NOR through FTDI D2XX.
+
+This is an unofficial, community-maintained project. It is not affiliated with
+or endorsed by ifix.net.
 
 ## Supported
 
@@ -10,13 +13,20 @@ Managed .NET 8 SDK used by Nexus Programmer to control RT809F SPI-NOR through FT
 - Optional blank-page skipping
 - Progress, cancellation and deterministic interface cleanup
 
-The SDK supports SPI 25xx devices up to 16 MiB. It uses a conservative 3 MHz clock and reproduces the interface-B socket-control sessions documented in `usbcap/`.
-
 ## Requirements
 
 - Windows and .NET 8
 - FTDI D2XX driver
 - Matching `ftd2xx64.dll` or `ftd2xx.dll` available to the process
+
+Driver binaries are not distributed with this repository. Install or obtain them from FTDI or your device vendor and make sure the matching 32-bit or 64-bit DLL can be found by the running process.
+
+## Build
+
+```powershell
+dotnet build src/RT809F.SDK.csproj
+dotnet build src/samples/RT809F.Cli/RT809F.Cli.csproj
+```
 
 ## Library
 
@@ -44,3 +54,11 @@ dotnet run --project src/samples/RT809F.Cli -- verify backup.bin
 Erase and write require `--yes`. Run the CLI without arguments for all commands.
 
 The `usbcap/` directory is retained as protocol documentation and is not required at runtime.
+
+## Safety
+
+Erase and write operations modify the attached flash device. Always keep a verified backup before destructive commands.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
