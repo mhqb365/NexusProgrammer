@@ -20,7 +20,7 @@ Flashing BIOS application for CH341, CH347, XGecu T48 and RT809F
 
 - Windows 10/11
 - .NET 8
-- CH341/CH347 Driver 👉 [DriverCH341+CH347.zip](Drivers/CH34XPAR.zip)
+- CH341/CH347 Driver 👉 [DriverCH341+CH347.zip](Drivers/DriverCH341+CH347.zip)
 - XGecu T48 Driver 👉 [DriverXGecuT48.zip](Drivers/DriverXGecuT48.zip)
 - RT809F Driver 👉 [DriverRT809F.zip](Drivers/DriverRT809F.zip)
 
@@ -62,7 +62,7 @@ See `THIRD_PARTY_NOTICES.md` and `flashrom-data/COPYING.rst` for more informatio
 
 - Windows 10/11
 - .NET 8
-- Driver CH341/CH347 👉 [DriverCH341+CH347.zip](Drivers/CH34XPAR.zip)
+- Driver CH341/CH347 👉 [DriverCH341+CH347.zip](Drivers/DriverCH341+CH347.zip)
 - Driver XGecu T48 👉 [DriverXGecuT48.zip](Drivers/DriverXGecuT48.zip)
 - Driver RT809F 👉 [DriverRT809F.zip](Drivers/DriverRT809F.zip)
 
