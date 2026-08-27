@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using static NexusProgrammer.ProgrammerProgress;
 
 namespace NexusProgrammer;
 
@@ -131,7 +132,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             var response = SpiRead(command, count);
             Buffer.BlockCopy(response, 0, result, done, count);
             done += count;
-            progress.Report(length == 0 ? 100 : done * 100 / length);
+            progress.Report(ProgressPercent(done, length));
         }
 
         progress.Report(100);
@@ -306,7 +307,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
             Buffer.BlockCopy(read, 0, result, done, count);
             done += count;
-            progress.Report(length == 0 ? 100 : done * 100 / length);
+            progress.Report(ProgressPercent(done, length));
         }
 
         progress.Report(100);
@@ -387,7 +388,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
     private static void ReportProgress(IProgress<int> progress, int total, int done, ref int lastProgress)
     {
-        var value = total == 0 ? 100 : Math.Clamp(done * 100 / total, 0, 100);
+        var value = ProgressPercent(done, total);
         if (value == lastProgress)
         {
             return;
@@ -665,7 +666,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
             var response = SpiTransfer(command);
             Buffer.BlockCopy(response, command.Length - count, result, done, count);
             done += count;
-            progress.Report(length == 0 ? 100 : done * 100 / length);
+            progress.Report(ProgressPercent(done, length));
         }
 
         progress.Report(100);
@@ -692,7 +693,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
             if (skipBlankPages && IsBlank(data, done, count))
             {
                 done += count;
-                progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+                progress.Report(ProgressPercent(done, data.Length));
                 continue;
             }
 
@@ -708,7 +709,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
             await WaitUntilReadyAsync();
 
             done += count;
-            progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+            progress.Report(ProgressPercent(done, data.Length));
         }
 
         progress.Report(100);
@@ -812,7 +813,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
             Buffer.BlockCopy(read, 0, result, done, count);
             done += count;
-            progress.Report(length == 0 ? 100 : done * 100 / length);
+            progress.Report(ProgressPercent(done, length));
         }
 
         progress.Report(100);
@@ -830,7 +831,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
             if (skipBlankPages && IsBlank(data, done, count))
             {
                 done += count;
-                progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+                progress.Report(ProgressPercent(done, data.Length));
                 continue;
             }
 
@@ -842,7 +843,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
             }
 
             done += count;
-            progress.Report(data.Length == 0 ? 100 : done * 100 / data.Length);
+            progress.Report(ProgressPercent(done, data.Length));
             await Task.Delay(8);
         }
 
@@ -1111,6 +1112,12 @@ internal static class WchUsbDeviceDetector
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetupDiDestroyDeviceInfoList(IntPtr deviceInfoSet);
     }
+}
+
+internal static class ProgrammerProgress
+{
+    public static int ProgressPercent(int done, int total) =>
+        total <= 0 ? 100 : (int)Math.Clamp((long)done * 100 / total, 0, 100);
 }
 
 

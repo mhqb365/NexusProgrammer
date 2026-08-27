@@ -29,7 +29,7 @@ public sealed class MockProgrammer : IChipProgrammer
             data[i] = (byte)((startAddress + i) & 0xFF);
             if (i % 4096 == 0)
             {
-                progress.Report(data.Length == 0 ? 100 : i * 100 / data.Length);
+                progress.Report(ProgrammerProgress.ProgressPercent(i, data.Length));
                 await Task.Delay(1);
             }
         }
@@ -56,7 +56,7 @@ public sealed class MockProgrammer : IChipProgrammer
         var blocks = Math.Max(1, length / 4096);
         for (var i = 0; i <= blocks; i++)
         {
-            progress.Report(i * 100 / blocks);
+            progress.Report(ProgrammerProgress.ProgressPercent(i, blocks));
             await Task.Delay(4);
         }
     }

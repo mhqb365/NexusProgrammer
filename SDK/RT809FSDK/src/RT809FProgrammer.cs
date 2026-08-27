@@ -159,7 +159,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
                     if (batch.Count > 0 && batch.Count + frameSize > ProgramBatchSize)
                     {
                         FlushProgramBatch(batch, token);
-                        progress?.Report(done * 100 / owned.Length);
+                        progress?.Report(ProgressPercent(done, owned.Length));
                     }
 
                     AppendProgramFrame(batch, current, page);
@@ -246,7 +246,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
                 {
                     token.ThrowIfCancellationRequested(); var count = Math.Min(buffer.Length, length - done);
                     ClockRead(buffer.AsSpan(0, count)); consume(buffer.AsSpan(0, count), address + (uint)done);
-                    done += count; progress?.Report(done * 100 / length);
+                    done += count; progress?.Report(ProgressPercent(done, length));
                 }
             }
             finally { EndContinuousRead(); }
@@ -264,7 +264,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
             while (done < output.Length)
             {
                 token.ThrowIfCancellationRequested(); var count = Math.Min(ReadBlockSize, output.Length - done);
-                ClockRead(output.Slice(done, count)); done += count; progress?.Report(done * 100 / output.Length);
+                ClockRead(output.Slice(done, count)); done += count; progress?.Report(ProgressPercent(done, output.Length));
             }
         }
         finally { EndContinuousRead(); }
@@ -489,6 +489,9 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         use4ByteAddress
             ? [(byte)(address >> 24), (byte)(address >> 16), (byte)(address >> 8), (byte)address]
             : [(byte)(address >> 16), (byte)(address >> 8), (byte)address];
+
+    private static int ProgressPercent(int done, int total) =>
+        total <= 0 ? 100 : (int)Math.Clamp((long)done * 100 / total, 0, 100);
 
     private static void AppendAddress(List<byte> batch, uint address, bool use4ByteAddress)
     {
