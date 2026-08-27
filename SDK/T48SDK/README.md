@@ -1,14 +1,15 @@
 # XGecu T48 SDK
 
-SDK to control XGecu T48 Programmer SPI-NOR through WinUSB.
+.NET SDK to control XGecu T48 programmer SPI-NOR through WinUSB.
 
 This is an unofficial, community-maintained project. It is not affiliated with
 or endorsed by XGecu.
 
 ## Status
 
-Experimental. The SDK is useful for protocol work and controlled hardware
-testing, but the public API and protocol coverage may change.
+Experimental but usable for controlled hardware testing and application
+integration. The SDK is useful for protocol work, but the public API and
+protocol coverage may change as more flash chips are validated.
 
 Working on real hardware:
 
@@ -19,6 +20,8 @@ Working on real hardware:
 - Blank-check SPI25 flash ranges.
 - Erase SPI25 chip.
 - Write SPI25 flash pages.
+- Optional sparse write that skips blank `0xFF` pages.
+- 1.8V and large-flash protocol profiles exposed through API flags.
 - Refuse destructive operations when the initial probe does not confirm the
   selected SPI flash ID.
 
@@ -51,8 +54,8 @@ The SDK uses this GUID to enumerate and open the programmer.
 - Windows.
 - XGecu WinUSB driver installed.
 - .NET SDK/runtime matching the project target. The library currently targets
-  `net8.0-windows` and `net10.0-windows`; the `T48Probe` sample targets
-  `net10.0-windows`.
+  `net8.0-windows` and `net10.0-windows`; the `T48Probe` sample currently
+  targets `net10.0-windows`.
 - Close `Xgpro.exe`, Wireshark, and `dumpcap.exe` before using the SDK. They can
   hold the USB device and cause `Access is denied`.
 
@@ -71,8 +74,16 @@ T48SDK/
 
 ## Build
 
+From this directory:
+
 ```powershell
-dotnet build ".\T48SDK\XGecuT48SDK.sln"
+dotnet build .\XGecuT48SDK.sln
+```
+
+From the Nexus Programmer repository root:
+
+```powershell
+dotnet build .\SDK\T48SDK\XGecuT48SDK.sln
 ```
 
 Built DLLs:
@@ -147,7 +158,25 @@ Write constraints:
 
 - Offset must be aligned to `256` bytes.
 - Data length must be a multiple of `256` bytes.
+- Set `useLargeFlashProfile: true` for chips that need the large-flash command
+  profile.
+- Set `use1V8Profile: true` only when the chip and adapter setup require the
+  1.8V profile.
 - Use a sacrificial/test chip until your app has its own confirmation flow.
+
+Public API highlights:
+
+```text
+T48DeviceDiscovery.FindConnectedDevices()
+T48UsbDevice.OpenFirst(IUsbTransferLogger? logger)
+T48UsbDevice.Open(T48DeviceInfo info, IUsbTransferLogger? logger)
+T48Spi25Client.ReadJedecId(bool use1V8Profile)
+T48Spi25Client.ReadFlash(uint offset, int length, IProgress<T48Progress>? progress, bool useLargeFlashProfile, bool use1V8Profile)
+T48Spi25Client.BlankCheck(uint offset, int length, IProgress<T48Progress>? progress, bool useLargeFlashProfile, bool use1V8Profile)
+T48Spi25Client.EraseChip(IProgress<T48Progress>? progress, TimeSpan? progressEstimate, bool useLargeFlashProfile, bool use1V8Profile)
+T48Spi25Client.WriteFlash(uint offset, ReadOnlySpan<byte> data, IProgress<T48Progress>? progress, bool useLargeFlashProfile, bool use1V8Profile)
+T48Spi25Client.WriteFlashSparse(uint offset, ReadOnlySpan<byte> data, IProgress<T48Progress>? progress, bool useLargeFlashProfile, bool use1V8Profile)
+```
 
 ## CLI Usage
 

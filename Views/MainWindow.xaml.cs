@@ -10,7 +10,6 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Windows.Media;
@@ -591,28 +590,18 @@ public partial class MainWindow : Window
     private async Task ProbeProgrammerAsync(bool logWhenChanged, bool forceLog = false)
     {
         await Task.Yield();
-        var t48Detected = T48SDKProgrammer.CanOpenDevice();
-        var rt809fDetected = RT809FSDKProgrammer.CanOpenDevice();
-        var ch347Detected = Ch347NativeProgrammer.IsAvailable && Ch347NativeProgrammer.CanOpenDevice();
-        var chDetected = ChNativeProgrammer.IsAvailable && ChNativeProgrammer.CanOpenDevice();
+        var detection = ProgrammerDetectionService.DetectAvailable();
 
-        UpdateProgrammerOptionStates(t48Detected, rt809fDetected, ch347Detected, chDetected, logWhenChanged);
-        ApplyProgrammerDetection(t48Detected, rt809fDetected, ch347Detected, chDetected, logWhenChanged, forceLog);
+        UpdateProgrammerOptionStates(detection, logWhenChanged);
+        ApplyProgrammerDetection(detection, logWhenChanged, forceLog);
     }
 
-    private void UpdateProgrammerOptionStates(bool t48Detected, bool rt809fDetected, bool ch347Detected, bool chDetected, bool logWhenChanged)
+    private void UpdateProgrammerOptionStates(ProgrammerDetection detection, bool logWhenChanged)
     {
         foreach (var opt in _programmerOptions)
         {
             var wasConnected = opt.IsConnected;
-            var isConnected = opt.Key switch
-            {
-                "t48" => t48Detected,
-                "rt809f" => rt809fDetected,
-                "ch347" => ch347Detected,
-                "ch341" => chDetected,
-                _ => true
-            };
+            var isConnected = detection.IsConnected(opt.Key);
             opt.IsConnected = isConnected;
             if (logWhenChanged && opt.ShowsStatus && wasConnected != isConnected)
             {
@@ -621,31 +610,31 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplyProgrammerDetection(bool t48Detected, bool rt809fDetected, bool ch347Detected, bool chDetected, bool logWhenChanged, bool forceLog)
+    private void ApplyProgrammerDetection(ProgrammerDetection detection, bool logWhenChanged, bool forceLog)
     {
         var selectedMode = (ProgrammerSelectorCombo?.SelectedItem as ProgrammerOption)?.Key ?? "auto";
 
         if (selectedMode == "auto")
         {
-            if (t48Detected)
+            if (detection.T48Detected)
             {
                 SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", logWhenChanged, forceLog);
                 return;
             }
 
-            if (rt809fDetected)
+            if (detection.Rt809fDetected)
             {
                 SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
                 return;
             }
 
-            if (ch347Detected)
+            if (detection.Ch347Detected)
             {
                 SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", logWhenChanged, forceLog);
                 return;
             }
 
-            if (chDetected)
+            if (detection.Ch341Detected)
             {
                 SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", logWhenChanged, forceLog);
                 return;
@@ -656,28 +645,28 @@ public partial class MainWindow : Window
             switch (selectedMode)
             {
                 case "t48":
-                    if (t48Detected)
+                    if (detection.T48Detected)
                     {
                         SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", logWhenChanged, forceLog);
                         return;
                     }
                     break;
                 case "rt809f":
-                    if (rt809fDetected)
+                    if (detection.Rt809fDetected)
                     {
                         SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
                         return;
                     }
                     break;
                 case "ch347":
-                    if (ch347Detected)
+                    if (detection.Ch347Detected)
                     {
                         SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", logWhenChanged, forceLog);
                         return;
                     }
                     break;
                 case "ch341":
-                    if (chDetected)
+                    if (detection.Ch341Detected)
                     {
                         SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", logWhenChanged, forceLog);
                         return;
@@ -2726,48 +2715,6 @@ public partial class MainWindow : Window
             ? $"{bytesPerSecond / (1024 * 1024):0.##} MB/s"
             : $"{bytesPerSecond / 1024:0.##} KB/s";
     }
-}
-
-internal sealed class MemoryTabState
-{
-    public MemoryTabState(int index, TabItem tab, HexEditorView editor, ScrollBar scrollBar, byte[] buffer)
-    {
-        Index = index;
-        Tab = tab;
-        Editor = editor;
-        ScrollBar = scrollBar;
-        Buffer = buffer;
-    }
-
-    public int Index { get; set; }
-    public TabItem Tab { get; }
-    public HexEditorView Editor { get; }
-    public ScrollBar ScrollBar { get; }
-    public byte[] Buffer { get; set; }
-    public MeaAnalysisResult? MeaAnalysis { get; set; }
-    public string SourceFileName { get; set; } = string.Empty;
-}
-
-internal sealed class LoggedOperationException : Exception
-{
-}
-
-public sealed class ProgrammerStatusBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is true ? Brushes.LimeGreen : Brushes.Red;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
-        Binding.DoNothing;
-}
-
-public sealed class ProgrammerStatusVisibilityConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is true ? Visibility.Visible : Visibility.Collapsed;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
-        Binding.DoNothing;
 }
 
 
