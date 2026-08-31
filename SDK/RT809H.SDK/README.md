@@ -60,7 +60,7 @@ the FTDI device can prevent the SDK from opening the programmer.
 ## Project Layout
 
 ```text
-RT809HSDK/
+RT809H.SDK/
   src/RT809HProgrammer.cs        Reusable SDK library
   src/RT809H.SDK.csproj          Library project
   src/samples/RT809H.Cli/        CLI sample and smoke-test tool
@@ -78,8 +78,8 @@ dotnet build .\src\samples\RT809H.Cli\RT809H.Cli.csproj
 From the Nexus Programmer repository root:
 
 ```powershell
-dotnet build .\SDK\RT809HSDK\src\RT809H.SDK.csproj
-dotnet build .\SDK\RT809HSDK\src\samples\RT809H.Cli\RT809H.Cli.csproj
+dotnet build .\SDK\RT809H.SDK\src\RT809H.SDK.csproj
+dotnet build .\SDK\RT809H.SDK\src\samples\RT809H.Cli\RT809H.Cli.csproj
 ```
 
 ## Add To Another .NET App
@@ -88,7 +88,7 @@ Add a project reference:
 
 ```xml
 <ItemGroup>
-  <ProjectReference Include="path\to\RT809HSDK\src\RT809H.SDK.csproj" />
+  <ProjectReference Include="path\to\RT809H.SDK\src\RT809H.SDK.csproj" />
 </ItemGroup>
 ```
 
