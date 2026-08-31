@@ -2220,8 +2220,21 @@ public partial class MainWindow : Window
                 bool readOk;
                 if (_programmer is RT809HSDKProgrammer rt809hProgrammer)
                 {
-                    var result = await rt809hProgrammer.ReadAndVerifyAsync(chip, startAddress, _buffer.Length, progress, progress);
-                    SetActiveBuffer(result.Data);
+                    var result = await rt809hProgrammer.ReadAndVerifyAsync(
+                        chip,
+                        startAddress,
+                        _buffer.Length,
+                        progress,
+                        progress,
+                        (data, elapsed) =>
+                        {
+                            SetActiveBuffer(data);
+                            readElapsed = elapsed;
+                            AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(_buffer.Length, readElapsed)})");
+                            RebuildRows();
+                            UpdateStatus();
+                        },
+                        () => AppendLog("Script stage: verify started"));
                     readElapsed = result.ReadElapsed;
                     verifyElapsed = result.VerifyElapsed;
                     readOk = result.Verified;
@@ -2238,10 +2251,14 @@ public partial class MainWindow : Window
                     verifyElapsed = stageWatch.Elapsed;
                 }
 
-                AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(_buffer.Length, readElapsed)})");
-                RebuildRows();
-                UpdateStatus();
-                AppendLog("Script stage: verify started");
+                if (_programmer is not RT809HSDKProgrammer)
+                {
+                    AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(_buffer.Length, readElapsed)})");
+                    RebuildRows();
+                    UpdateStatus();
+                    AppendLog("Script stage: verify started");
+                }
+
                 AppendLog(readOk
                     ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(verifyElapsed)} ({FormatSpeed(_buffer.Length, verifyElapsed)})"
                     : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(verifyElapsed)} ({FormatSpeed(_buffer.Length, verifyElapsed)})");
@@ -2260,15 +2277,30 @@ public partial class MainWindow : Window
             bool ok;
             if (_programmer is RT809HSDKProgrammer rt809hWriter)
             {
-                var result = await rt809hWriter.EraseWriteVerifyAsync(chip, startAddress, _buffer, skipBlankPages, progress, progress, progress);
+                var result = await rt809hWriter.EraseWriteVerifyAsync(
+                    chip,
+                    startAddress,
+                    _buffer,
+                    skipBlankPages,
+                    progress,
+                    progress,
+                    progress,
+                    elapsed =>
+                    {
+                        eraseElapsed = elapsed;
+                        AppendLog($"Script stage: erase completed in {FormatDuration(eraseElapsed)}");
+                    },
+                    () => AppendLog("Script stage: write started"),
+                    elapsed =>
+                    {
+                        writeElapsed = elapsed;
+                        AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(_buffer.Length, writeElapsed)})");
+                    },
+                    () => AppendLog("Script stage: verify started"));
                 eraseElapsed = result.EraseElapsed;
                 writeElapsed = result.WriteElapsed;
                 finalVerifyElapsed = result.VerifyElapsed;
                 ok = result.Verified;
-                AppendLog($"Script stage: erase completed in {FormatDuration(eraseElapsed)}");
-                AppendLog("Script stage: write started");
-                AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(_buffer.Length, writeElapsed)})");
-                AppendLog("Script stage: verify started");
             }
             else
             {
@@ -2498,7 +2530,7 @@ public partial class MainWindow : Window
 
     private bool ConfirmVoltageAdapterIfNeeded(ChipProfile chip, string operationName)
     {
-        if (_programmer is T48SDKProgrammer)
+        if (_programmer is T48SDKProgrammer or RT809HSDKProgrammer)
         {
             return true;
         }
