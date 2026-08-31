@@ -1,8 +1,9 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
 
-namespace RT809F.SDK;
+namespace RT809H.SDK;
 
 public readonly record struct JedecId(byte Manufacturer, byte MemoryType, byte CapacityCode)
 {
@@ -10,31 +11,34 @@ public readonly record struct JedecId(byte Manufacturer, byte MemoryType, byte C
     public override string ToString() => $"{Manufacturer:X2} {MemoryType:X2} {CapacityCode:X2}";
 }
 
-public sealed class RT809FException(string message, int status, Exception? inner = null) : IOException(message, inner)
+public sealed class RT809HException(string message, int status, Exception? inner = null) : IOException(message, inner)
 {
     public int Status { get; } = status;
 }
 
-/// <summary>Thread-safe .NET 8 SDK for the RT809F SPI-NOR interface.</summary>
-public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
+/// <summary>Thread-safe .NET 8 SDK for the RT809H SPI-NOR interface.</summary>
+public sealed class RT809HProgrammer : IDisposable, IAsyncDisposable
 {
     private const uint FtdiId = 0x04036010;
-    private const int ReadBlockSize = 256 * 1024;
+    private const int ReadBlockSize = 1024 * 1024;
     private const int MpsseReadLimit = 64 * 1024;
     private const int PageSize = 256;
     private const int ProgramBatchSize = 63_720;
+    private const int MpsseSettleMilliseconds = 10;
+    private const int ControllerSettleMilliseconds = 8;
+    private const int ControllerReplyTimeoutMilliseconds = 200;
     private const ulong AddressSpaceSize = 0x1_0000_0000UL;
-    private const string ExpectedSerial = "gggggggg";
+    private const string ExpectedSerial = "byCHUNJI";
     private const byte PinsIdle = 0x08, PinsActive = 0x00, PinDirections = 0x0B;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private FtdiHandle? _handle;
-    private string? _controlSerial;
     private delegate void BlockConsumer(ReadOnlySpan<byte> block, uint address);
+    private static readonly bool TraceEnabled = Environment.GetEnvironmentVariable("RT809H_TRACE") == "1";
+    private static readonly string TracePath = Path.Combine(Path.GetTempPath(), "rt809h-trace.log");
 
-    private RT809FProgrammer(FtdiHandle handle, string? controlSerial)
+    private RT809HProgrammer(FtdiHandle handle)
     {
         _handle = handle;
-        _controlSerial = controlSerial;
     }
 
     public static bool IsConnected()
@@ -56,33 +60,32 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
             }
             return false;
         }
-        catch (Exception ex) when (ex is RT809FException or DllNotFoundException or BadImageFormatException) { return false; }
+        catch (Exception ex) when (ex is RT809HException or DllNotFoundException or BadImageFormatException) { return false; }
     }
 
-    public static RT809FProgrammer Open()
+    public static RT809HProgrammer Open(bool use1V8Profile = false)
     {
         Native.EnsureLoaded();
         CheckNative(Native.FT_CreateDeviceInfoList(out var count), "FT_CreateDeviceInfoList");
-        string? selected = null, controlSerial = null;
+        string? selected = null;
         for (uint i = 0; i < count; i++)
         {
             var serial = new byte[32]; var description = new byte[128];
             if (Native.FT_GetDeviceInfoDetail(i, out _, out _, out var id, out _, serial, description, out _) != 0 || id != FtdiId) continue;
             var deviceSerial = Ascii(serial); var deviceDescription = Ascii(description);
+            Trace($"device[{i}] id=0x{id:X8} serial={deviceSerial} description={deviceDescription}");
             if (!IsExpectedProgrammerSerial(deviceSerial)) continue;
-            if (deviceDescription.EndsWith(" B", StringComparison.OrdinalIgnoreCase)) controlSerial = deviceSerial;
             selected ??= deviceSerial;
             if (deviceDescription.EndsWith(" A", StringComparison.OrdinalIgnoreCase)) selected = deviceSerial;
         }
-        if (string.IsNullOrEmpty(selected)) throw new RT809FException("RT809F not found.", 2);
-        if (!string.IsNullOrEmpty(controlSerial)) PrepareControlChannelBeforeSpi(controlSerial);
+        if (string.IsNullOrEmpty(selected)) throw new RT809HException("RT809H not found.", 2);
+        PrimeRt809hController(selected, use1V8Profile);
         CheckNative(Native.FT_OpenEx(System.Text.Encoding.ASCII.GetBytes(selected + '\0'), 1, out var raw), "FT_OpenEx");
         var handle = new FtdiHandle(raw);
         try
         {
             Configure(handle);
-            if (!string.IsNullOrEmpty(controlSerial)) PrepareControlChannelAfterSpi(controlSerial);
-            var programmer = new RT809FProgrammer(handle, controlSerial);
+            var programmer = new RT809HProgrammer(handle);
             programmer.WakeFlash();
             return programmer;
         }
@@ -92,10 +95,9 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
     public JedecId ReadId()
     {
         using var lease = Enter();
-        // The vendor software issues WREN before JEDEC ID on this programmer.
-        Command(0x06);
-        Span<byte> reply = stackalloc byte[3]; Transaction([0x9F], reply);
-        Command(0x04);
+        Span<byte> reply = stackalloc byte[3];
+        ReadIdCaptured(reply);
+        Trace($"JEDEC {Convert.ToHexString(reply)}");
         return new(reply[0], reply[1], reply[2]);
     }
 
@@ -120,7 +122,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         await RunLockedAsync(() => ProcessReadBlocks(address, length, progress, token, (block, current) =>
         {
             var index = block.IndexOfAnyExcept((byte)0xFF);
-            if (index >= 0) throw new RT809FException($"Flash is not blank at 0x{current + (uint)index:X8}.", 6);
+            if (index >= 0) throw new RT809HException($"Flash is not blank at 0x{current + (uint)index:X8}.", 6);
         }), token).ConfigureAwait(false);
     }
 
@@ -129,13 +131,14 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         if (timeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(timeout));
         await RunLockedAsync(() =>
         {
+            SetOperationClock();
             Command(0x06); Command(0xC7);
             var started = DateTime.UtcNow;
             while ((ReadStatus() & 1) != 0)
             {
                 token.ThrowIfCancellationRequested();
                 var elapsed = DateTime.UtcNow - started;
-                if (elapsed >= timeout) throw new TimeoutException("RT809F chip erase timed out.");
+                if (elapsed >= timeout) throw new TimeoutException("RT809H chip erase timed out.");
                 progress?.Report((int)Math.Clamp(elapsed.TotalMilliseconds / timeout.TotalMilliseconds * 100, 0, 99));
                 Thread.Sleep(25);
             }
@@ -149,6 +152,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         ValidateRange(address, data.Length); var owned = data.ToArray();
         await RunLockedAsync(() =>
         {
+            SetOperationClock();
             var done = 0;
             var batch = new List<byte>(ProgramBatchSize);
             while (done < owned.Length)
@@ -191,7 +195,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
 
     private static void AppendProgramFrame(List<byte> batch, uint address, ReadOnlySpan<byte> page)
     {
-        // Captured RT809F page frame: WREN, page program, then GPIO READY wait.
+        // Captured RT809H page frame: WREN, page program, then GPIO READY wait.
         var use4ByteAddress = Uses4ByteAddress(address);
         var commandLength = page.Length + (use4ByteAddress ? 5 : 4);
         batch.AddRange([0x80, PinsActive, PinDirections, 0x11, 0x00, 0x00, 0x06,
@@ -222,7 +226,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
                 if (!block.SequenceEqual(expectedBlock))
                 {
                     var i = 0; while (block[i] == expectedBlock[i]) i++;
-                    throw new RT809FException($"Verify failed at 0x{current + (uint)i:X8}.", 6);
+                    throw new RT809HException($"Verify failed at 0x{current + (uint)i:X8}.", 6);
                 }
                 offset += block.Length;
             });
@@ -281,6 +285,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         var use4ByteAddress = Uses4ByteAddress(address, length);
         byte[] command =
         [
+            0x8A, 0x86, FastClockDivisorLow, FastClockDivisorHigh,
             0x80, PinsActive, PinDirections, 0x11, 0x00, 0x00, 0x06,
             0x80, PinsIdle, PinDirections,
             0x80, PinsActive, PinDirections, 0x11, (byte)(use4ByteAddress ? 0x04 : 0x03), 0x00,
@@ -307,7 +312,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
             remaining -= chunk + 1;
         }
         WriteAll(commands);
-        ReadExact(output, TimeSpan.FromSeconds(Math.Max(5, output.Length / 250_000.0 + 3)));
+        ReadStream(output, TimeSpan.FromSeconds(Math.Max(5, output.Length / 1_000_000.0 + 3)));
     }
 
     private void EndContinuousRead()
@@ -316,14 +321,50 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         Command(0x04);
     }
 
+    private void SetOperationClock() => WriteAll([0x8A, 0x86, FastClockDivisorLow, FastClockDivisorHigh]);
+
     private byte ReadStatus() { Span<byte> value = stackalloc byte[1]; Transaction([0x05], value); return value[0]; }
     private void Command(byte opcode) => Transaction([opcode], Span<byte>.Empty);
 
+    private void ReadIdCaptured(Span<byte> reply)
+    {
+        if (reply.Length != 3) throw new ArgumentOutOfRangeException(nameof(reply));
+
+        // RT809H's vendor workflow pulses WREN before JEDEC ID and sends the
+        // MPSSE read clocks as a separate USB write. Some boards ignore a
+        // plain 9F transaction even though the SPI opcode itself is standard.
+        WriteAll([
+            0x8A, 0x86, 0xCC, 0xCC,
+            0x8A, 0x86, 0x1D, 0x00,
+            0x80, PinsActive, PinDirections,
+            0x11, 0x00, 0x00, 0x06,
+            0x80, PinsIdle, PinDirections,
+            0x80, PinsActive, PinDirections,
+            0x11, 0x00, 0x00, 0x9F
+        ]);
+        WriteAll([0x20, 0x02, 0x00]);
+        ReadExact(reply, TimeSpan.FromSeconds(5));
+        Trace($"ReadIdCaptured reply {Convert.ToHexString(reply)}");
+        WriteAll([0x80, PinsIdle, PinDirections]);
+        Command(0x04);
+    }
+
     private void WakeFlash()
     {
-        Command(0x06);
         Span<byte> ignored = stackalloc byte[3];
-        Transaction([0xAB,0x00,0x00,0x00], ignored);
+        WriteAll([
+            0x8A, 0x86, 0xCC, 0xCC,
+            0x8A, 0x86, 0x1D, 0x00,
+            0x80, PinsActive, PinDirections,
+            0x11, 0x00, 0x00, 0x06,
+            0x80, PinsIdle, PinDirections,
+            0x80, PinsActive, PinDirections,
+            0x11, 0x03, 0x00, 0xAB, 0x00, 0x00, 0x00
+        ]);
+        WriteAll([0x20, 0x02, 0x00]);
+        ReadExact(ignored, TimeSpan.FromSeconds(5));
+        Trace($"WakeFlash AB reply {Convert.ToHexString(ignored)}");
+        WriteAll([0x80, PinsIdle, PinDirections]);
         Command(0x04);
         Thread.Sleep(1);
     }
@@ -377,7 +418,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
                 CheckNative(Native.FT_Write(handle, (IntPtr)(p + offset), (uint)(data.Length - offset), out var written), "FT_Write");
                 if (written == 0)
                 {
-                    if (DateTime.UtcNow >= deadline) throw new RT809FException("FT_Write returned zero bytes.", 4);
+                    if (DateTime.UtcNow >= deadline) throw new RT809HException("FT_Write returned zero bytes.", 4);
                     Thread.Sleep(1); continue;
                 }
                 offset += checked((int)written);
@@ -394,10 +435,33 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
             while (offset < output.Length)
             {
                 CheckNative(Native.FT_GetQueueStatus(handle, out var queued), "FT_GetQueueStatus");
-                if (queued == 0) { if (DateTime.UtcNow >= deadline) throw new TimeoutException("Timed out waiting for RT809F."); Thread.Sleep(1); continue; }
+                if (queued == 0) { if (DateTime.UtcNow >= deadline) throw new TimeoutException("Timed out waiting for RT809H."); Thread.Sleep(1); continue; }
                 var wanted = Math.Min(queued, (uint)(output.Length - offset));
                 CheckNative(Native.FT_Read(handle, (IntPtr)(p + offset), wanted, out var read), "FT_Read");
-                if (read == 0) throw new RT809FException("FT_Read returned zero bytes.", 4);
+                if (read == 0) throw new RT809HException("FT_Read returned zero bytes.", 4);
+                offset += checked((int)read);
+            }
+        }
+    }
+
+    private unsafe void ReadStream(Span<byte> output, TimeSpan timeout)
+    {
+        var handle = Handle;
+        var deadline = DateTime.UtcNow + timeout;
+        fixed (byte* p = output)
+        {
+            var offset = 0;
+            while (offset < output.Length)
+            {
+                var wanted = (uint)Math.Min(MpsseReadLimit, output.Length - offset);
+                CheckNative(Native.FT_Read(handle, (IntPtr)(p + offset), wanted, out var read), "FT_Read(stream)");
+                if (read == 0)
+                {
+                    if (DateTime.UtcNow >= deadline) throw new TimeoutException("Timed out waiting for RT809H stream.");
+                    Thread.Sleep(1);
+                    continue;
+                }
+
                 offset += checked((int)read);
             }
         }
@@ -409,74 +473,222 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         try { _ = Handle; return new(_gate); } catch { _gate.Release(); throw; }
     }
 
-    private FtdiHandle Handle => _handle is { IsInvalid: false, IsClosed: false } h ? h : throw new ObjectDisposedException(nameof(RT809FProgrammer));
+    private FtdiHandle Handle => _handle is { IsInvalid: false, IsClosed: false } h ? h : throw new ObjectDisposedException(nameof(RT809HProgrammer));
 
     private static void Configure(FtdiHandle h)
     {
         CheckNative(Native.FT_ResetDevice(h), "FT_ResetDevice"); CheckNative(Native.FT_SetUSBParameters(h,65536,65536), "FT_SetUSBParameters");
         CheckNative(Native.FT_SetTimeouts(h,5000,5000), "FT_SetTimeouts"); CheckNative(Native.FT_SetLatencyTimer(h,2), "FT_SetLatencyTimer");
-        CheckNative(Native.FT_SetBitMode(h,0,0), "FT_SetBitMode(reset)"); CheckNative(Native.FT_SetBitMode(h,0,2), "FT_SetBitMode(MPSSE)");
-        Thread.Sleep(50); CheckNative(Native.FT_Purge(h,3), "FT_Purge");
-        // RT809F uses the FTDI divide-by-5 clock mode. Divisor 0 selects 6 MHz
-        // (12 MHz / ((1 + 0) * 2)), matching the vendor application's clock.
-        byte[] init = [0x86,0x00,0x00,0x82,0xFE,0x09,0x80,PinsIdle,PinDirections];
-        unsafe { fixed (byte* p = init) CheckNative(Native.FT_Write(h,(IntPtr)p,(uint)init.Length,out var written),"FT_Write(init)"); }
+        CheckNative(Native.FT_SetBitMode(h,0xFF,0), "FT_SetBitMode(reset)");
+        ConfigureControllerUart(h);
+        CheckNative(Native.FT_SetBitMode(h,0xFF,2), "FT_SetBitMode(MPSSE)");
+        Thread.Sleep(MpsseSettleMilliseconds);
+        CheckNative(Native.FT_Purge(h,3), "FT_Purge");
         Thread.Sleep(2);
-        CheckNative(Native.FT_Purge(h, 1), "FT_Purge(RX after init)");
     }
 
-    private static void PrepareControlChannelBeforeSpi(string serial)
+    private static unsafe void PrimeRt809hSocket(FtdiHandle h, bool use1V8Profile)
     {
-        RunControlSession(serial, ControlA);
-        RunControlSession(serial, ControlA);
-        RunControlSession(serial, ControlB, ControlC);
-    }
-
-    private static void PrepareControlChannelAfterSpi(string serial)
-    {
-        RunControlSession(serial, ControlB, ControlD);
-        RunControlSession(serial, ControlA);
-        RunControlSession(serial, ControlB, ControlC);
-    }
-
-    private static void CleanupControlChannel(string serial)
-    {
-        RunControlSession(serial, ControlB, ControlE);
-        RunControlSession(serial, ControlA);
-    }
-
-    private static void RunControlSession(string serial, params string[] encodedFrames)
-    {
-        CheckNative(Native.FT_OpenEx(System.Text.Encoding.ASCII.GetBytes(serial + '\0'), 1, out var raw), "FT_OpenEx(B)");
-        using var h = new FtdiHandle(raw);
-        CheckNative(Native.FT_ResetDevice(h), "FT_ResetDevice(B)");
-        CheckNative(Native.FT_Purge(h, 3), "FT_Purge(B)");
-        CheckNative(Native.FT_SetUSBParameters(h, 65536, 65536), "FT_SetUSBParameters(B)");
-        CheckNative(Native.FT_SetLatencyTimer(h, 2), "FT_SetLatencyTimer(B)");
-        CheckNative(Native.FT_SetBaudRate(h, 100000), "FT_SetBaudRate(B)");
-        CheckNative(Native.FT_SetBitMode(h, 0xF5, 0x04), "FT_SetBitMode(sync bit-bang B)");
-        Thread.Sleep(2);
-        foreach (var encoded in encodedFrames)
+        // Captured RT809H controller/socket setup from detect-ic.pcapng. Unlike
+        // RT809F, the H model drives this setup on interface A before SPI MPSSE.
+        RunRt809hControllerFrame(h, HexPart(Rt809hInitPing, 266));
+        var handshakeBody = new byte[128];
+        RandomNumberGenerator.Fill(handshakeBody);
+        RunRt809hControllerFrame(h, HexPart(Rt809hInitHandshakeHeader, 10), new(handshakeBody, 1));
+        if (use1V8Profile)
         {
-            var frame = Convert.FromHexString(encoded);
-            unsafe
+            RunRt809hControllerFrame(h, HexPart(Rt809hInitPing, 266));
+        }
+
+        var socketBody = use1V8Profile ? Rt809hInitSocketBody1V8 : Rt809hInitSocketBody3V3;
+        var socketEnable = use1V8Profile ? Rt809hSpiSocketEnable1V8 : Rt809hSpiSocketEnable3V3;
+        RunRt809hControllerFrame(h, HexPart(Rt809hInitSocketHeader, 10), HexPart(socketBody, 40));
+        RunRt809hControllerFrame(h, HexPart(Rt809hInitModeHeader, 10), HexPart(Rt809hInitModeBody, 48));
+        RunRt809hControllerFrame(h, HexPart(socketEnable, 10));
+    }
+
+    private static void PrimeRt809hController(string serial, bool use1V8Profile)
+    {
+        Trace($"prime controller serial={serial}");
+        CheckNative(Native.FT_OpenEx(System.Text.Encoding.ASCII.GetBytes(serial + '\0'), 1, out var raw), "FT_OpenEx(RT809H controller)");
+        using var h = new FtdiHandle(raw);
+        CheckNative(Native.FT_ResetDevice(h), "FT_ResetDevice(RT809H controller)");
+        CheckNative(Native.FT_Purge(h, 3), "FT_Purge(RT809H controller)");
+        CheckNative(Native.FT_SetUSBParameters(h, 65536, 65536), "FT_SetUSBParameters(RT809H controller)");
+        CheckNative(Native.FT_SetTimeouts(h, 5000, 5000), "FT_SetTimeouts(RT809H controller)");
+        CheckNative(Native.FT_SetLatencyTimer(h, 2), "FT_SetLatencyTimer(RT809H controller)");
+        CheckNative(Native.FT_SetBitMode(h, 0xFF, 0), "FT_SetBitMode(reset RT809H controller)");
+        ConfigureControllerUart(h);
+        PrimeRt809hSocket(h, use1V8Profile);
+    }
+
+    private static ControllerPart HexPart(string encoded, int replyLength) => new(Convert.FromHexString(encoded), replyLength);
+
+    private static void RunRt809hControllerFrame(FtdiHandle h, params ControllerPart[] parts)
+    {
+        foreach (var part in parts)
+        {
+            RunRt809hControllerFrame(h, part.Frame, part.ReplyLength);
+        }
+    }
+
+    private static unsafe void RunRt809hControllerFrame(FtdiHandle h, ReadOnlySpan<byte> frame, int replyLength)
+    {
+        Trace($"controller out {Convert.ToHexString(frame)} expect={replyLength}");
+        PrepareRt809hControllerChannel(h);
+
+        fixed (byte* p = frame)
+        {
+            CheckNative(Native.FT_Write(h, (IntPtr)p, (uint)frame.Length, out var written), "FT_Write(RT809H controller)");
+            if (written != frame.Length) throw new RT809HException("Short write on RT809H controller.", 4);
+        }
+
+        Thread.Sleep(2);
+        if (replyLength > 0)
+        {
+            var reply = ArrayPool<byte>.Shared.Rent(replyLength);
+            try
             {
-                fixed (byte* p = frame)
+                var read = TryReadControllerReply(h, reply.AsSpan(0, replyLength), TimeSpan.FromMilliseconds(ControllerReplyTimeoutMilliseconds));
+                Trace($"controller in read={read} {Convert.ToHexString(reply.AsSpan(0, replyLength))}");
+            }
+            finally { ArrayPool<byte>.Shared.Return(reply); }
+        }
+        DrainQueued(h);
+    }
+
+    private static unsafe void PrepareRt809hControllerChannel(FtdiHandle h)
+    {
+        CheckNative(Native.FT_SetBitMode(h, 0xFF, 2), "FT_SetBitMode(MPSSE before controller)");
+        Thread.Sleep(2);
+        WriteRaw(h, [0x82, 0x00, 0x40]);
+        Thread.Sleep(2);
+        WriteRaw(h, [0x82, 0xFF, 0x00]);
+        Thread.Sleep(2);
+        CheckNative(Native.FT_SetBitMode(h, 0xFF, ControllerMode), "FT_SetBitMode(controller)");
+        Thread.Sleep(ControllerSettleMilliseconds);
+        DrainQueued(h);
+    }
+
+    private static unsafe void WriteRaw(FtdiHandle h, ReadOnlySpan<byte> data)
+    {
+        fixed (byte* p = data)
+        {
+            CheckNative(Native.FT_Write(h, (IntPtr)p, (uint)data.Length, out var written), "FT_Write(RT809H raw)");
+            if (written != data.Length) throw new RT809HException("Short write on RT809H raw channel.", 4);
+        }
+    }
+
+    private static unsafe void DrainQueued(FtdiHandle h)
+    {
+        CheckNative(Native.FT_GetQueueStatus(h, out var queued), "FT_GetQueueStatus(RT809H controller)");
+        if (queued == 0) return;
+        var buffer = ArrayPool<byte>.Shared.Rent(checked((int)Math.Min(queued, 4096)));
+        try
+        {
+            fixed (byte* p = buffer)
+            {
+                while (queued > 0)
                 {
-                    CheckNative(Native.FT_Write(h, (IntPtr)p, (uint)frame.Length, out var written), "FT_Write(B)");
-                    if (written != frame.Length) throw new RT809FException("Short write on RT809F control channel.", 4);
+                    var count = Math.Min(queued, (uint)buffer.Length);
+                    CheckNative(Native.FT_Read(h, (IntPtr)p, count, out var read), "FT_Read(RT809H controller)");
+                    if (read == 0) break;
+                    queued -= read;
+                    if (queued == 0) CheckNative(Native.FT_GetQueueStatus(h, out queued), "FT_GetQueueStatus(RT809H controller)");
                 }
             }
-            Thread.Sleep(2);
         }
-        CheckNative(Native.FT_SetBitMode(h, 0, 0), "FT_SetBitMode(reset B)");
+        finally { ArrayPool<byte>.Shared.Return(buffer); }
     }
 
-    private const string ControlA = "4F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7F6F7FFF";
-    private const string ControlB = "0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0F1F0B1B0B1B0F1F0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B5BFF";
-    private const string ControlC = "0B1B0B1B0B1B0F1F0B1B0F1F0B1B0B1B0B1B0F1F0B1B0B1B0F1F0B1B0B1B0F1F0B1B0B1B0B1B0F1F0F1F0F1F0F1F0F1F0F1F0F1F0B1B0B1B0B1B0B1B0B1B0B1B5BFF";
-    private const string ControlD = "0B1B0B1B0F1F0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0F1F0F1F0F1F0F1F0F1F0B1B0F1F0B1B0B1B0B1B0B1B0B1B0B1B5BFF";
-    private const string ControlE = "0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0B1B0F1F0F1F0F1F0F1F0F1F0B1B0F1F0B1B0B1B0B1B0B1B0B1B0B1B5BFF";
+    private static void ConfigureControllerUart(FtdiHandle h)
+    {
+        CheckNative(Native.FT_SetLatencyTimer(h, 2), "FT_SetLatencyTimer(RT809H controller)");
+        CheckNative(Native.FT_SetFlowControl(h, 0, 1, 1), "FT_SetFlowControl(RT809H controller)");
+        CheckNative(Native.FT_SetDataCharacteristics(h, 8, 0, 0), "FT_SetDataCharacteristics(RT809H controller)");
+        CheckNative(Native.FT_SetChars(h, 0, 0, 0, 0), "FT_SetChars(RT809H controller)");
+        CheckNative(Native.FT_SetRts(h), "FT_SetRts(RT809H controller)");
+        for (var i = 0; i < 6; i++)
+        {
+            CheckNative(Native.FT_Purge(h, 1), "FT_Purge(RX RT809H controller)");
+        }
+    }
+
+    private static unsafe bool TryReadControllerReply(FtdiHandle h, Span<byte> output, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        fixed (byte* p = output)
+        {
+            var offset = 0;
+            while (offset < output.Length)
+            {
+                CheckNative(Native.FT_GetQueueStatus(h, out var queued), "FT_GetQueueStatus(RT809H controller)");
+                if (queued == 0)
+                {
+                    if (DateTime.UtcNow >= deadline) return offset > 0;
+                    Thread.Sleep(1);
+                    continue;
+                }
+
+                var wanted = Math.Min(queued, (uint)(output.Length - offset));
+                CheckNative(Native.FT_Read(h, (IntPtr)(p + offset), wanted, out var read), "FT_Read(RT809H controller)");
+                if (read == 0) return offset > 0;
+                offset += checked((int)read);
+            }
+        }
+
+        return true;
+    }
+
+    private static void Trace(string message)
+    {
+        if (!TraceEnabled) return;
+        File.AppendAllText(TracePath, $"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}");
+    }
+
+    private const string Rt809hInitPing = "AAEACDCD6CCDCDCDCDCD";
+    private const string Rt809hInitHandshakeHeader = "AA15CDCD93CDCDCDCDCD";
+    private const string Rt809hInitSocketHeader = "AA56140029CDCDCDCDCD";
+    private const string Rt809hInitSocketBody3V3 =
+        "0B00BD00EA0011021102110211021102110211021102110211021102110294021102110294029402";
+    private const string Rt809hInitSocketBody1V8 =
+        "0B00DB00EA0011021102110211021102110211021102110211021102110294021102110268016801";
+    private const string Rt809hInitModeHeader = "AA3A0000240000000014";
+    private const string Rt809hInitModeBody = "000000000000000000000000";
+    private const string Rt809hSpiSocketEnable3V3 = "AA520000CF0101010101";
+    private const string Rt809hSpiSocketEnable1V8 = "AA520040CD0101010101";
+    private readonly record struct ControllerPart(byte[] Frame, int ReplyLength);
+    private static byte ControllerMode =>
+        byte.TryParse(Environment.GetEnvironmentVariable("RT809H_CONTROLLER_MODE"), out var mode) ? mode : (byte)0;
+    private static ushort FastClockDivisor
+    {
+        get
+        {
+            var requested = ParseUShortEnvironment("RT809H_FAST_DIVISOR");
+            if (requested == 0 && Environment.GetEnvironmentVariable("RT809H_ALLOW_UNSAFE_FAST") != "1")
+            {
+                return 1;
+            }
+
+            return requested ?? 1;
+        }
+    }
+    private static byte FastClockDivisorLow => (byte)FastClockDivisor;
+    private static byte FastClockDivisorHigh => (byte)(FastClockDivisor >> 8);
+
+    private static ushort? ParseUShortEnvironment(string name)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            return ushort.TryParse(value[2..], System.Globalization.NumberStyles.HexNumber, null, out var hexValue)
+                ? hexValue
+                : null;
+        }
+
+        return ushort.TryParse(value, out var decimalValue) ? decimalValue : null;
+    }
 
     private static void ValidateRange(uint address, int length)
     {
@@ -511,7 +723,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
 
     private static string Ascii(byte[] value) { var end = Array.IndexOf(value,(byte)0); return System.Text.Encoding.ASCII.GetString(value,0,end < 0 ? value.Length : end); }
     private static bool IsExpectedProgrammerSerial(string serial) => serial.StartsWith(ExpectedSerial, StringComparison.OrdinalIgnoreCase);
-    private static void CheckNative(uint status, string operation) { if (status != 0) throw new RT809FException($"{operation} failed with D2XX status {status}.",checked((int)status)); }
+    private static void CheckNative(uint status, string operation) { if (status != 0) throw new RT809HException($"{operation} failed with D2XX status {status}.",checked((int)status)); }
 
     public void Dispose()
     {
@@ -525,11 +737,6 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
             }
             _handle?.Dispose();
             _handle = null;
-            if (!string.IsNullOrEmpty(_controlSerial))
-            {
-                CleanupControlChannel(_controlSerial);
-                _controlSerial = null;
-            }
         }
         finally { _gate.Release(); }
         GC.SuppressFinalize(this);
@@ -546,7 +753,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
 
     private static class Native
     {
-        private const string Library = "rt809f_d2xx";
+        private const string Library = "rt809h_d2xx";
         private static readonly object ResolverLock = new();
         private static bool _configured;
         internal static void EnsureLoaded()
@@ -573,6 +780,11 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
         [DllImport(Library)] internal static extern uint FT_SetTimeouts(FtdiHandle handle,uint read,uint write);
         [DllImport(Library)] internal static extern uint FT_SetLatencyTimer(FtdiHandle handle,byte latency);
         [DllImport(Library)] internal static extern uint FT_SetBaudRate(FtdiHandle handle,uint baudRate);
+        [DllImport(Library)] internal static extern uint FT_SetFlowControl(FtdiHandle handle,ushort flowControl,byte xon,byte xoff);
+        [DllImport(Library)] internal static extern uint FT_SetDataCharacteristics(FtdiHandle handle,byte wordLength,byte stopBits,byte parity);
+        [DllImport(Library)] internal static extern uint FT_SetChars(FtdiHandle handle,byte eventChar,byte eventCharEnabled,byte errorChar,byte errorCharEnabled);
+        [DllImport(Library)] internal static extern uint FT_SetDtr(FtdiHandle handle);
+        [DllImport(Library)] internal static extern uint FT_SetRts(FtdiHandle handle);
         [DllImport(Library)] internal static extern uint FT_SetUSBParameters(FtdiHandle handle,uint input,uint output);
         [DllImport(Library)] internal static extern uint FT_SetBitMode(FtdiHandle handle,byte mask,byte mode);
         [DllImport(Library)] internal static extern uint FT_GetQueueStatus(FtdiHandle handle,out uint queued);
