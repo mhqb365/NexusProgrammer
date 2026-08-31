@@ -6,11 +6,11 @@
 
 English | [Tiếng Việt](#tiếng-việt)
 
-Flashing BIOS application for CH341, CH347, XGecu T48 and RT809F
+Flashing BIOS application for CH341, CH347, XGecu T48, RT809F and RT809H
 
 ## Features
 
-- Supports CH341, CH347, XGecu T48 and RT809F programmers
+- Supports CH341, CH347, XGecu T48, RT809F and RT809H programmers
 - Automatic IC detection and search, add new ICs not currently in the list
 - Hex-format buffer preview and editing
 - Read, write, verify, erase, and execute workflow scripts
@@ -23,6 +23,25 @@ Flashing BIOS application for CH341, CH347, XGecu T48 and RT809F
 - CH341/CH347 Driver 👉 [DriverCH341+CH347.zip](Drivers/DriverCH341+CH347.zip)
 - XGecu T48 Driver 👉 [DriverXGecuT48.zip](Drivers/DriverXGecuT48.zip)
 - RT809F Driver 👉 [DriverRT809F.zip](Drivers/DriverRT809F.zip)
+- RT809H Driver 👉 [DriverRT809H.zip](Drivers/DriverRT809H.zip)
+
+## SDKs
+
+This repository includes experimental .NET hardware SDKs which can be used
+outside the WPF application:
+
+- [XGecu T48 SDK](SDK/T48SDK/README.md): WinUSB-based SPI25 support for device
+  discovery, JEDEC ID, read, blank check, erase, write, sparse write, transfer
+  logging and protocol experiments.
+- [RT809F SDK](SDK/RT809FSDK/README.md): FTDI D2XX-based SPI-NOR support for
+  discovery, JEDEC ID, read, blank check, erase, batched page program, verify,
+  progress, cancellation and deterministic cleanup.
+- [RT809H SDK](SDK/RT809HSDK/README.md): FTDI D2XX-based SPI-NOR support using
+  RT809H-specific initialization captured from vendor workflows.
+
+These SDKs are unofficial community projects and are not endorsed by the device
+vendors. Treat erase and write operations as destructive and test new
+integrations with sacrificial flash chips.
 
 ## Download
 

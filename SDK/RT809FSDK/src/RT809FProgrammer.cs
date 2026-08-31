@@ -24,6 +24,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
     private const int PageSize = 256;
     private const int ProgramBatchSize = 63_720;
     private const ulong AddressSpaceSize = 0x1_0000_0000UL;
+    private const string ExpectedSerial = "gggggggg";
     private const byte PinsIdle = 0x08, PinsActive = 0x00, PinDirections = 0x0B;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private FtdiHandle? _handle;
@@ -46,7 +47,9 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
             {
                 var serial = new byte[32];
                 var description = new byte[128];
-                if (Native.FT_GetDeviceInfoDetail(i, out _, out _, out var id, out _, serial, description, out _) == 0 && id == FtdiId)
+                if (Native.FT_GetDeviceInfoDetail(i, out _, out _, out var id, out _, serial, description, out _) == 0 &&
+                    id == FtdiId &&
+                    IsExpectedProgrammerSerial(Ascii(serial)))
                 {
                     return true;
                 }
@@ -66,6 +69,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
             var serial = new byte[32]; var description = new byte[128];
             if (Native.FT_GetDeviceInfoDetail(i, out _, out _, out var id, out _, serial, description, out _) != 0 || id != FtdiId) continue;
             var deviceSerial = Ascii(serial); var deviceDescription = Ascii(description);
+            if (!IsExpectedProgrammerSerial(deviceSerial)) continue;
             if (deviceDescription.EndsWith(" B", StringComparison.OrdinalIgnoreCase)) controlSerial = deviceSerial;
             selected ??= deviceSerial;
             if (deviceDescription.EndsWith(" A", StringComparison.OrdinalIgnoreCase)) selected = deviceSerial;
@@ -506,6 +510,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
     }
 
     private static string Ascii(byte[] value) { var end = Array.IndexOf(value,(byte)0); return System.Text.Encoding.ASCII.GetString(value,0,end < 0 ? value.Length : end); }
+    private static bool IsExpectedProgrammerSerial(string serial) => serial.StartsWith(ExpectedSerial, StringComparison.OrdinalIgnoreCase);
     private static void CheckNative(uint status, string operation) { if (status != 0) throw new RT809FException($"{operation} failed with D2XX status {status}.",checked((int)status)); }
 
     public void Dispose()

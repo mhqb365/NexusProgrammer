@@ -3,6 +3,7 @@ namespace NexusProgrammer;
 internal sealed record ProgrammerDetection(
     bool T48Detected,
     bool Rt809fDetected,
+    bool Rt809hDetected,
     bool Ch347Detected,
     bool Ch341Detected)
 {
@@ -10,6 +11,7 @@ internal sealed record ProgrammerDetection(
     {
         "t48" => T48Detected,
         "rt809f" => Rt809fDetected,
+        "rt809h" => Rt809hDetected,
         "ch347" => Ch347Detected,
         "ch341" => Ch341Detected,
         _ => true
@@ -21,6 +23,7 @@ internal static class ProgrammerDetectionService
     public static ProgrammerDetection DetectAvailable() => new(
         T48SDKProgrammer.CanOpenDevice(),
         RT809FSDKProgrammer.CanOpenDevice(),
+        RT809HSDKProgrammer.CanOpenDevice(),
         Ch347NativeProgrammer.IsAvailable && Ch347NativeProgrammer.CanOpenDevice(),
         ChNativeProgrammer.IsAvailable && ChNativeProgrammer.CanOpenDevice());
 }

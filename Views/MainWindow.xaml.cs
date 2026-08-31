@@ -83,6 +83,7 @@ public partial class MainWindow : Window
         new("auto", "Auto"),
         new("t48", "XGecu T48"),
         new("rt809f", "RT809F"),
+        new("rt809h", "RT809H"),
         new("ch347", "CH347"),
         new("ch341", "CH341")
     ];
@@ -622,6 +623,12 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (detection.Rt809hDetected)
+            {
+                SetConnectedProgrammer("rt809h", new RT809HSDKProgrammer(), "RT809H connected", logWhenChanged, forceLog);
+                return;
+            }
+
             if (detection.Rt809fDetected)
             {
                 SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
@@ -655,6 +662,13 @@ public partial class MainWindow : Window
                     if (detection.Rt809fDetected)
                     {
                         SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
+                        return;
+                    }
+                    break;
+                case "rt809h":
+                    if (detection.Rt809hDetected)
+                    {
+                        SetConnectedProgrammer("rt809h", new RT809HSDKProgrammer(), "RT809H connected", logWhenChanged, forceLog);
                         return;
                     }
                     break;
@@ -2201,19 +2215,36 @@ public partial class MainWindow : Window
             {
                 AppendLog($"Script request: read and verify {FormatBytes(_buffer.Length)} from 0x{startAddress:X6}");
                 AppendLog("Script stage: read started");
-                var stageWatch = Stopwatch.StartNew();
-                SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
-                stageWatch.Stop();
+                TimeSpan readElapsed;
+                TimeSpan verifyElapsed;
+                bool readOk;
+                if (_programmer is RT809HSDKProgrammer rt809hProgrammer)
+                {
+                    var result = await rt809hProgrammer.ReadAndVerifyAsync(chip, startAddress, _buffer.Length, progress, progress);
+                    SetActiveBuffer(result.Data);
+                    readElapsed = result.ReadElapsed;
+                    verifyElapsed = result.VerifyElapsed;
+                    readOk = result.Verified;
+                }
+                else
+                {
+                    var stageWatch = Stopwatch.StartNew();
+                    SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
+                    stageWatch.Stop();
+                    readElapsed = stageWatch.Elapsed;
+                    stageWatch.Restart();
+                    readOk = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
+                    stageWatch.Stop();
+                    verifyElapsed = stageWatch.Elapsed;
+                }
+
+                AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(_buffer.Length, readElapsed)})");
                 RebuildRows();
                 UpdateStatus();
-                AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(stageWatch.Elapsed)} ({FormatSpeed(_buffer.Length, stageWatch.Elapsed)})");
                 AppendLog("Script stage: verify started");
-                stageWatch.Restart();
-                var readOk = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
-                stageWatch.Stop();
                 AppendLog(readOk
-                    ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(stageWatch.Elapsed)} ({FormatSpeed(_buffer.Length, stageWatch.Elapsed)})"
-                    : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(stageWatch.Elapsed)} ({FormatSpeed(_buffer.Length, stageWatch.Elapsed)})");
+                    ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(verifyElapsed)} ({FormatSpeed(_buffer.Length, verifyElapsed)})"
+                    : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(verifyElapsed)} ({FormatSpeed(_buffer.Length, verifyElapsed)})");
                 AppendLog(readOk ? "Script completed: read + verify OK" : "Script completed: read + verify failed");
                 saveAfterScript = true;
                 return;
@@ -2223,23 +2254,46 @@ public partial class MainWindow : Window
             AppendLog($"Script request: erase, write and verify {FormatBytes(_buffer.Length)} at 0x{startAddress:X6}");
             await UnprotectIfRequestedAsync(chip, progress);
             AppendLog("Script stage: erase started");
-            var eraseWriteVerifyWatch = Stopwatch.StartNew();
-            await _programmer.EraseAsync(chip, progress);
-            eraseWriteVerifyWatch.Stop();
-            AppendLog($"Script stage: erase completed in {FormatDuration(eraseWriteVerifyWatch.Elapsed)}");
-            await UnprotectIfRequestedAsync(chip, progress);
-            AppendLog("Script stage: write started");
-            eraseWriteVerifyWatch.Restart();
-            await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages);
-            eraseWriteVerifyWatch.Stop();
-            AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(eraseWriteVerifyWatch.Elapsed)} ({FormatSpeed(_buffer.Length, eraseWriteVerifyWatch.Elapsed)})");
-            AppendLog("Script stage: verify started");
-            eraseWriteVerifyWatch.Restart();
-            var ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
-            eraseWriteVerifyWatch.Stop();
+            TimeSpan eraseElapsed;
+            TimeSpan writeElapsed;
+            TimeSpan finalVerifyElapsed;
+            bool ok;
+            if (_programmer is RT809HSDKProgrammer rt809hWriter)
+            {
+                var result = await rt809hWriter.EraseWriteVerifyAsync(chip, startAddress, _buffer, skipBlankPages, progress, progress, progress);
+                eraseElapsed = result.EraseElapsed;
+                writeElapsed = result.WriteElapsed;
+                finalVerifyElapsed = result.VerifyElapsed;
+                ok = result.Verified;
+                AppendLog($"Script stage: erase completed in {FormatDuration(eraseElapsed)}");
+                AppendLog("Script stage: write started");
+                AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(_buffer.Length, writeElapsed)})");
+                AppendLog("Script stage: verify started");
+            }
+            else
+            {
+                var eraseWriteVerifyWatch = Stopwatch.StartNew();
+                await _programmer.EraseAsync(chip, progress);
+                eraseWriteVerifyWatch.Stop();
+                eraseElapsed = eraseWriteVerifyWatch.Elapsed;
+                AppendLog($"Script stage: erase completed in {FormatDuration(eraseElapsed)}");
+                await UnprotectIfRequestedAsync(chip, progress);
+                AppendLog("Script stage: write started");
+                eraseWriteVerifyWatch.Restart();
+                await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages);
+                eraseWriteVerifyWatch.Stop();
+                writeElapsed = eraseWriteVerifyWatch.Elapsed;
+                AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(_buffer.Length, writeElapsed)})");
+                AppendLog("Script stage: verify started");
+                eraseWriteVerifyWatch.Restart();
+                ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
+                eraseWriteVerifyWatch.Stop();
+                finalVerifyElapsed = eraseWriteVerifyWatch.Elapsed;
+            }
+
             AppendLog(ok
-                ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(eraseWriteVerifyWatch.Elapsed)} ({FormatSpeed(_buffer.Length, eraseWriteVerifyWatch.Elapsed)})"
-                : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(eraseWriteVerifyWatch.Elapsed)} ({FormatSpeed(_buffer.Length, eraseWriteVerifyWatch.Elapsed)})");
+                ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(finalVerifyElapsed)} ({FormatSpeed(_buffer.Length, finalVerifyElapsed)})"
+                : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(finalVerifyElapsed)} ({FormatSpeed(_buffer.Length, finalVerifyElapsed)})");
             AppendLog(ok ? "Script completed: verify OK" : "Script completed: verify failed");
         });
         if (saveAfterScript)

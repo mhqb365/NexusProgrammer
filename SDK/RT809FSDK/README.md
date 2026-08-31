@@ -27,6 +27,10 @@ Working on real hardware:
 The SDK supports 3-byte and 4-byte SPI-NOR addressing. Range arguments are still
 `int` lengths, so a single operation is limited to a .NET array-sized buffer.
 
+The RT809F fingerprint used by this SDK is FTDI VID/PID `0403:6010` with serial
+string `gggggggg`. This avoids confusing it with RT809H hardware, which uses the
+same VID/PID but a different serial string.
+
 ## Requirements
 
 - Windows.
