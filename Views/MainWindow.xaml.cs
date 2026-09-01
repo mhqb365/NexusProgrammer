@@ -2504,6 +2504,18 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == true)
         {
             _settings = dialog.Settings;
+            ThemeService.Apply(_settings.ThemeName);
+            ApplyThemeToMemoryEditors();
+        }
+    }
+
+    private void ApplyThemeToMemoryEditors()
+    {
+        foreach (var state in _memoryTabs.Values)
+        {
+            state.Editor.Background = (Brush)FindResource("SurfaceBackgroundBrush");
+            state.Editor.Foreground = (Brush)FindResource("TextBrush");
+            state.Editor.InvalidateVisual();
         }
     }
 

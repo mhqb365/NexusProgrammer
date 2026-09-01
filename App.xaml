@@ -8,7 +8,18 @@
         <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#EFEFEF"/>
         <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#E8E8E8"/>
         <SolidColorBrush x:Key="ToolbarButtonBackgroundBrush" Color="#E8E8E8"/>
+        <SolidColorBrush x:Key="ToolbarButtonHoverBackgroundBrush" Color="#E9F3FF"/>
+        <SolidColorBrush x:Key="ToolbarButtonPressedBackgroundBrush" Color="#DDEEFF"/>
         <SolidColorBrush x:Key="ToolbarButtonBorderBrush" Color="#E8E8E8"/>
+        <SolidColorBrush x:Key="ToolbarButtonForegroundBrush" Color="#000000"/>
+        <SolidColorBrush x:Key="HexHeaderButtonBackgroundBrush" Color="#F7F7F7"/>
+        <SolidColorBrush x:Key="HexHeaderButtonForegroundBrush" Color="#000000"/>
+        <SolidColorBrush x:Key="HexHeaderButtonBorderBrush" Color="#B8B8B8"/>
+        <SolidColorBrush x:Key="StandardButtonBackgroundBrush" Color="#F7F7F7"/>
+        <SolidColorBrush x:Key="StandardButtonHoverBackgroundBrush" Color="#E9F3FF"/>
+        <SolidColorBrush x:Key="StandardButtonPressedBackgroundBrush" Color="#DDEEFF"/>
+        <SolidColorBrush x:Key="StandardButtonForegroundBrush" Color="#000000"/>
+        <SolidColorBrush x:Key="StandardButtonBorderBrush" Color="#B8B8B8"/>
         <SolidColorBrush x:Key="SurfaceBackgroundBrush" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="SubtleBackgroundBrush" Color="#F6F6F6"/>
         <SolidColorBrush x:Key="InputBackgroundBrush" Color="#F7F7F7"/>
@@ -29,7 +40,43 @@
         <SolidColorBrush x:Key="SelectionBackgroundBrush" Color="#DDEEFF"/>
         <SolidColorBrush x:Key="SelectionForegroundBrush" Color="#000000"/>
         <SolidColorBrush x:Key="ProgressTrackBrush" Color="#E5E5E5"/>
-        <SolidColorBrush x:Key="StopBackgroundBrush" Color="#FFF0F0"/>
-        <SolidColorBrush x:Key="StopForegroundBrush" Color="#B00000"/>
+        <Style x:Key="ThemedButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Foreground" Value="{DynamicResource StandardButtonForegroundBrush}" />
+            <Setter Property="Background" Value="{DynamicResource StandardButtonBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource StandardButtonBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                RecognizesAccessKey="True"
+                                TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background"
+                                    Value="{DynamicResource StandardButtonHoverBackgroundBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background"
+                                    Value="{DynamicResource StandardButtonPressedBackgroundBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.65" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Application.Resources>
 </Application>
