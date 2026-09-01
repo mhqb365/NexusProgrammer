@@ -779,8 +779,7 @@ public partial class MainWindow : Window
         VerifyChipMenuItem.IsEnabled = enabled;
         EraseButton.IsEnabled = enabled;
         EraseChipMenuItem.IsEnabled = enabled;
-        ReadVerifyScriptMenuItem.IsEnabled = enabled;
-        EraseWriteVerifyScriptMenuItem.IsEnabled = enabled;
+        ScriptButton.IsEnabled = enabled;
     }
 
     private bool EnsureProgrammerAvailable(string operationName)
@@ -1093,6 +1092,12 @@ public partial class MainWindow : Window
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
         AppendLog("Stop requested. Current operation will finish its current block");
+    }
+
+    private void ScriptButton_Click(object sender, RoutedEventArgs e)
+    {
+        ScriptButton.ContextMenu.PlacementTarget = ScriptButton;
+        ScriptButton.ContextMenu.IsOpen = true;
     }
 
     private async void HexSearchPrevious_Click(object sender, RoutedEventArgs e) => await RunSearchAsync(forward: false);

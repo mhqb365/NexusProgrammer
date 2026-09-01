@@ -319,13 +319,7 @@
                 <MenuItem x:Name="VerifyChipMenuItem" Header="Verify" Click="Verify_Click" />
                 <MenuItem x:Name="EraseChipMenuItem" Header="Erase" Click="Erase_Click" />
             </MenuItem>
-            <MenuItem x:Name="ScriptsMenu" Header="_Scripts">
-                <MenuItem x:Name="ReadVerifyScriptMenuItem" Header="Read + Verify"
-                    Tag="Read + verify" Click="RunScript_Click" />
-                <MenuItem x:Name="EraseWriteVerifyScriptMenuItem" Header="Erase + Write + Verify"
-                    Tag="Erase + write + verify" Click="RunScript_Click" />
-            </MenuItem>
-            <MenuItem x:Name="SettingMenuItem" Header="_Setting" Click="Setting_Click" />
+            <MenuItem x:Name="SettingMenuItem" Header="_Settings" Click="Setting_Click" />
             <MenuItem x:Name="AboutMenuItem" Header="_About" Click="About_Click" />
         </Menu>
 
@@ -462,6 +456,22 @@
                             HorizontalAlignment="Center" />
                         <TextBlock Text="Erase" HorizontalAlignment="Center" FontSize="10" />
                     </StackPanel>
+                </Button>
+                <Button x:Name="ScriptButton" ToolTip="Run workflow script"
+                    Click="ScriptButton_Click">
+                    <StackPanel>
+                        <iconPacks:PackIconLucide Width="18" Height="18" Kind="ScrollText"
+                            HorizontalAlignment="Center" />
+                        <TextBlock Text="Scripts" HorizontalAlignment="Center" FontSize="10" />
+                    </StackPanel>
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Read + Verify" Tag="Read + verify"
+                                Click="RunScript_Click" />
+                            <MenuItem Header="Erase + Write + Verify"
+                                Tag="Erase + write + verify" Click="RunScript_Click" />
+                        </ContextMenu>
+                    </Button.ContextMenu>
                 </Button>
                 <Button x:Name="StopButton" ToolTip="Stop current operation" Click="Stop_Click">
                     <StackPanel>
