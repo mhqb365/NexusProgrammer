@@ -8,6 +8,7 @@ public sealed class AppSettings
     public string MeRegionRoot { get; set; } = string.Empty;
     public string FitRoot { get; set; } = string.Empty;
     public bool SoundEnabled { get; set; } = true;
+    public string ThemeName { get; set; } = ThemeService.DefaultThemeName;
 }
 
 internal static class AppSettingsService

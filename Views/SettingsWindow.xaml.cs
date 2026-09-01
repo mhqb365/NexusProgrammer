@@ -11,6 +11,10 @@ public partial class SettingsWindow : Window
         MeRegionRootBox.Text = settings.MeRegionRoot;
         FitRootBox.Text = settings.FitRoot;
         SoundEnabledCheckBox.IsChecked = settings.SoundEnabled;
+        ThemeCombo.ItemsSource = ThemeService.ThemeNames;
+        ThemeCombo.SelectedItem = ThemeService.ThemeNames.Contains(settings.ThemeName)
+            ? settings.ThemeName
+            : ThemeService.DefaultThemeName;
     }
 
     public AppSettings Settings { get; private set; } = new();
@@ -49,7 +53,8 @@ public partial class SettingsWindow : Window
         {
             MeRegionRoot = MeRegionRootBox.Text.Trim(),
             FitRoot = FitRootBox.Text.Trim(),
-            SoundEnabled = SoundEnabledCheckBox.IsChecked == true
+            SoundEnabled = SoundEnabledCheckBox.IsChecked == true,
+            ThemeName = ThemeCombo.SelectedItem as string ?? ThemeService.DefaultThemeName
         };
         AppSettingsService.Save(Settings);
         DialogResult = true;

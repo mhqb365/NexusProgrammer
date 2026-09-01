@@ -1,7 +1,7 @@
 <Window x:Class="NexusProgrammer.SettingsWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Settings" Width="560" Height="210"
+    Title="Settings" Width="560" Height="240"
     WindowStartupLocation="CenterOwner"
     ResizeMode="NoResize"
     Background="{DynamicResource AppBackgroundBrush}"
@@ -13,6 +13,7 @@
             <ColumnDefinition Width="86" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
+            <RowDefinition Height="30" />
             <RowDefinition Height="30" />
             <RowDefinition Height="30" />
             <RowDefinition Height="30" />
@@ -38,7 +39,12 @@
         <Button Grid.Row="2" Grid.Column="2" Height="24" Margin="0,0,0,6"
             Click="BrowseFitRoot_Click">Browse...</Button>
 
-        <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="Theme"
+            VerticalAlignment="Center" />
+        <ComboBox x:Name="ThemeCombo" Grid.Row="3" Grid.Column="1"
+            Height="24" Margin="0,0,8,6" />
+
+        <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
             Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
             <Button Width="76" Height="26" Margin="0,0,8,0"
                 Click="Save_Click">Save</Button>
