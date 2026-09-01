@@ -17,10 +17,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
             <Setter Property="Height" Value="24"/>
         </Style>
-        <Style TargetType="Button">
-            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Style TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
             <Setter Property="Padding" Value="12,4"/>
         </Style>
     </Window.Resources>

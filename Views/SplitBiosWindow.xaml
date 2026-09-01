@@ -6,6 +6,9 @@
     ResizeMode="CanResize"
     Background="{DynamicResource AppBackgroundBrush}"
     Foreground="{DynamicResource TextBrush}">
+    <Window.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}" />
+    </Window.Resources>
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />

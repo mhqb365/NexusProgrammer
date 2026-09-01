@@ -6,6 +6,9 @@
     ResizeMode="CanResize"
     Background="{DynamicResource AppBackgroundBrush}"
     Foreground="{DynamicResource TextBrush}">
+    <Window.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}" />
+    </Window.Resources>
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -50,7 +53,7 @@
 
                     <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
                         Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                        <Button x:Name="AnalyzeSingleButton" Width="86" Height="26"
+                        <Button x:Name="AnalyzeSingleButton" Width="90" Height="26"
                             Margin="0,0,8,0" Click="AnalyzeSingle_Click">Analyze BIOS</Button>
                         <Button x:Name="ClearMeButton" Width="76" Height="26"
                             Margin="0,0,8,0"
@@ -103,7 +106,7 @@
 
                     <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
                         Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                        <Button x:Name="AnalyzeDualButton" Width="86" Height="26"
+                        <Button x:Name="AnalyzeDualButton" Width="90" Height="26"
                             Margin="0,0,8,0" Click="AnalyzeDual_Click">Analyze BIOS</Button>
                         <Button x:Name="ClearDualMeButton" Width="76" Height="26"
                             Margin="0,0,8,0"
@@ -122,9 +125,9 @@
             </Grid.RowDefinitions>
             <StackPanel Grid.Row="0" Margin="0,0,0,6" Orientation="Horizontal"
                 HorizontalAlignment="Right">
-                <Button Width="70" Height="24" Margin="0,0,6,0"
+                <Button Width="80" Height="24" Margin="0,0,8,0"
                     Click="CopyAnalysisLog_Click">Copy log</Button>
-                <Button Width="70" Height="24"
+                <Button Width="80" Height="24"
                     Click="ClearAnalysisLog_Click">Clear log</Button>
             </StackPanel>
             <TextBox x:Name="AnalysisTextBox" Grid.Row="1"

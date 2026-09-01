@@ -47,13 +47,13 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="Background"
-                                    Value="{DynamicResource HoverBackgroundBrush}" />
+                                    Value="{DynamicResource ToolbarButtonHoverBackgroundBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="Background"
-                                    Value="{DynamicResource SelectionBackgroundBrush}" />
+                                    Value="{DynamicResource ToolbarButtonPressedBackgroundBrush}" />
                                 <Setter Property="Foreground"
-                                    Value="{DynamicResource SelectionForegroundBrush}" />
+                                    Value="{DynamicResource ToolbarButtonForegroundBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.65" />
@@ -86,11 +86,11 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ToggleBorder" Property="Background"
-                                    Value="{DynamicResource HoverBackgroundBrush}" />
+                                    Value="{DynamicResource ToolbarButtonHoverBackgroundBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="ToggleBorder" Property="Background"
-                                    Value="{DynamicResource HoverBackgroundBrush}" />
+                                    Value="{DynamicResource ToolbarButtonPressedBackgroundBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ToggleBorder" Property="Opacity" Value="0.65" />
@@ -282,6 +282,13 @@
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
         </Style>
+        <Style x:Key="HexHeaderButtonStyle" TargetType="Button"
+            BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Foreground" Value="{DynamicResource HexHeaderButtonForegroundBrush}" />
+            <Setter Property="Background" Value="{DynamicResource HexHeaderButtonBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource HexHeaderButtonBorderBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
     </Window.Resources>
 
     <DockPanel>
@@ -334,7 +341,8 @@
                         <Setter Property="Height" Value="46" />
                         <Setter Property="FontWeight" Value="SemiBold" />
                         <Setter Property="FontSize" Value="10" />
-                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                        <Setter Property="Foreground"
+                            Value="{DynamicResource ToolbarButtonForegroundBrush}" />
                         <Setter Property="Background"
                             Value="{DynamicResource ToolbarButtonBackgroundBrush}" />
                         <Setter Property="BorderBrush"
@@ -348,7 +356,8 @@
                         <Setter Property="Height" Value="46" />
                         <Setter Property="FontWeight" Value="SemiBold" />
                         <Setter Property="FontSize" Value="10" />
-                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                        <Setter Property="Foreground"
+                            Value="{DynamicResource ToolbarButtonForegroundBrush}" />
                         <Setter Property="Background"
                             Value="{DynamicResource ToolbarButtonBackgroundBrush}" />
                         <Setter Property="BorderBrush"
@@ -373,6 +382,10 @@
                         <Setter Property="StrokeStartLineCap" Value="Round" />
                         <Setter Property="StrokeEndLineCap" Value="Round" />
                         <Setter Property="StrokeLineJoin" Value="Round" />
+                    </Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground"
+                            Value="{DynamicResource ToolbarButtonForegroundBrush}" />
                     </Style>
                 </ToolBar.Resources>
                 <ToolBar.Template>
@@ -418,7 +431,7 @@
                     <StackPanel>
                         <iconPacks:PackIconLucide Width="18" Height="18" Kind="ScanBarCode"
                             HorizontalAlignment="Center" />
-                        <TextBlock Text="ID" HorizontalAlignment="Center" FontSize="10" />
+                        <TextBlock Text="Detect" HorizontalAlignment="Center" FontSize="10" />
                     </StackPanel>
                 </Button>
                 <Button x:Name="ReadButton" ToolTip="Read chip to buffer" Click="ReadChip_Click">
@@ -450,8 +463,7 @@
                         <TextBlock Text="Erase" HorizontalAlignment="Center" FontSize="10" />
                     </StackPanel>
                 </Button>
-                <Button x:Name="StopButton" ToolTip="Stop current operation" Click="Stop_Click"
-                    Foreground="{DynamicResource StopForegroundBrush}">
+                <Button x:Name="StopButton" ToolTip="Stop current operation" Click="Stop_Click">
                     <StackPanel>
                         <iconPacks:PackIconLucide Width="18" Height="18" Kind="Square"
                             HorizontalAlignment="Center" />
@@ -482,7 +494,8 @@
                                 SelectionChanged="ProgrammerSelectorCombo_SelectionChanged">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:ProgrammerOption}">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal"
+                                            VerticalAlignment="Center">
                                             <Ellipse Width="8" Height="8" Margin="0,0,6,0"
                                                 Fill="{Binding IsConnected, Converter={StaticResource ProgrammerStatusBrushConverter}}"
                                                 Visibility="{Binding ShowsStatus, Converter={StaticResource ProgrammerStatusVisibilityConverter}}" />
@@ -579,16 +592,17 @@
                         Margin="10,0,10,0" VerticalAlignment="Center" />
                     <Button x:Name="ClearMeButton" DockPanel.Dock="Right"
                         Width="70" Height="20" Margin="2,4,8,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Clear Intel ME region" Click="ClearMe_Click">Clear ME</Button>
                     <Button x:Name="WindowsKeyMenuButton" DockPanel.Dock="Right"
                         Width="70" Height="20" Margin="2,4,2,4" Padding="0"
-                        ToolTip="BIOS tools" Click="WindowsKeyMenuButton_Click">Menu
-                        <Button.ContextMenu>
+                        Style="{StaticResource HexHeaderButtonStyle}"
+                        ToolTip="BIOS tools" Click="WindowsKeyMenuButton_Click">Menu <Button.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
                                 <MenuItem Header="Merge BIOS" Click="MergeBios_Click" />
                                 <MenuItem Header="Split BIOS" Click="SplitBios_Click" />
-                                <Separator />
+                                <!-- <Separator />
                                 <MenuItem Header="Acer">
                                     <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
                                 </MenuItem>
@@ -603,25 +617,29 @@
                                 </MenuItem>
                                 <MenuItem Header="Lenovo">
                                     <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
-                                </MenuItem>
+                                </MenuItem> -->
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
                     <Button x:Name="HexSearchNextButton" DockPanel.Dock="Right" Width="24"
                         Height="20" Margin="2,4,2,4" Padding="0" ToolTip="Find next"
+                        Style="{StaticResource HexHeaderButtonStyle}"
                         Click="HexSearchNext_Click">
                         <iconPacks:PackIconLucide Width="10" Height="10" Kind="ChevronRight" />
                     </Button>
                     <Button x:Name="HexSearchPreviousButton" DockPanel.Dock="Right"
                         Width="24" Height="20" Margin="2,4,2,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Find previous" Click="HexSearchPrevious_Click">
                         <iconPacks:PackIconLucide Width="10" Height="10" Kind="ChevronLeft" />
                     </Button>
                     <Button x:Name="HexReplaceButton" DockPanel.Dock="Right" Width="64"
                         Height="20" Margin="2,4,2,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Open replace dialog" Click="HexReplace_Click">Replace</Button>
                     <Button x:Name="HexSearchAllButton" DockPanel.Dock="Right" Width="34"
                         Height="20" Margin="2,4,2,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Find all matches and log offsets"
                         Click="HexSearchAll_Click">All</Button>
                     <ComboBox x:Name="HexSearchModeCombo" DockPanel.Dock="Right" Width="82"
@@ -639,6 +657,7 @@
                     </ComboBox>
                     <Button x:Name="HexSearchClearButton" DockPanel.Dock="Right" Width="24"
                         Height="20" Margin="4,4,0,4" Padding="0" Visibility="Collapsed"
+                        Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Clear search" Click="HexSearchClear_Click">
                         <iconPacks:PackIconLucide Width="12" Height="12" Kind="X" />
                     </Button>
@@ -699,8 +718,10 @@
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
                         HorizontalAlignment="Right" Margin="0,0,6,0">
                         <Button x:Name="SaveLogButton" Height="20" Padding="8,0"
+                            Margin="0,0,8,0" Style="{StaticResource ThemedButtonStyle}"
                             Click="SaveLog_Click">Save log</Button>
                         <Button x:Name="ClearLogButton" Height="20" Padding="8,0"
+                            Style="{StaticResource ThemedButtonStyle}"
                             Click="ClearLog_Click">Clear log</Button>
                     </StackPanel>
                 </Grid>

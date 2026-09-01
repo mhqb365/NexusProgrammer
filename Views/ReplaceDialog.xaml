@@ -7,6 +7,9 @@
         Background="{DynamicResource AppBackgroundBrush}"
         Foreground="{DynamicResource TextBrush}"
         FontFamily="Segoe UI" FontSize="13">
+    <Window.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}" />
+    </Window.Resources>
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

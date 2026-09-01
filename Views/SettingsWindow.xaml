@@ -6,6 +6,9 @@
     ResizeMode="NoResize"
     Background="{DynamicResource AppBackgroundBrush}"
     Foreground="{DynamicResource TextBrush}">
+    <Window.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}" />
+    </Window.Resources>
     <Grid Margin="16">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="104" />
@@ -23,7 +26,7 @@
         <TextBlock Grid.Row="0" Grid.Column="0" Text="Sound"
             VerticalAlignment="Center" />
         <CheckBox x:Name="SoundEnabledCheckBox" Grid.Row="0" Grid.Column="1"
-            Content="Enable operation sounds" VerticalAlignment="Center" />
+            Content="Operation sounds" VerticalAlignment="Center" />
 
         <TextBlock Grid.Row="1" Grid.Column="0" Text="ME Region root"
             VerticalAlignment="Center" />
