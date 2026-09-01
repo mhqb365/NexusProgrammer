@@ -45,8 +45,12 @@ public sealed class HexEditorView : FrameworkElement
         ClipToBounds = true;
 
         var clearBufferItem = new MenuItem { Header = "Clear buffer" };
+        var mergeBiosItem = new MenuItem { Header = "Merge BIOS" };
+        var splitBiosItem = new MenuItem { Header = "Split BIOS" };
         clearBufferItem.Click += (_, _) => ClearBufferRequested?.Invoke(this, EventArgs.Empty);
-        ContextMenu = new ContextMenu { Items = { clearBufferItem } };
+        mergeBiosItem.Click += (_, _) => MergeBiosRequested?.Invoke(this, EventArgs.Empty);
+        splitBiosItem.Click += (_, _) => SplitBiosRequested?.Invoke(this, EventArgs.Empty);
+        ContextMenu = new ContextMenu { Items = { clearBufferItem, new Separator(), mergeBiosItem, splitBiosItem } };
     }
 
     public void SetBuffer(byte[] buffer, Action<int, byte> byteChanged)
@@ -74,6 +78,10 @@ public sealed class HexEditorView : FrameworkElement
     public event EventHandler? ScrollChanged;
 
     public event EventHandler? ClearBufferRequested;
+
+    public event EventHandler? MergeBiosRequested;
+
+    public event EventHandler? SplitBiosRequested;
 
     public void ScrollToOffset(int offset)
     {
@@ -608,7 +616,8 @@ public sealed class HexEditorView : FrameworkElement
         if (key is >= Key.A and <= Key.Z)
         {
             var c = (char)('A' + key - Key.A);
-            return Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? c : char.ToLowerInvariant(c);
+            var uppercase = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ^ Keyboard.IsKeyToggled(Key.CapsLock);
+            return uppercase ? c : char.ToLowerInvariant(c);
         }
 
         if (key is >= Key.D0 and <= Key.D9)

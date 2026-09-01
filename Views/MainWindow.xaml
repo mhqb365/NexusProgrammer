@@ -538,10 +538,33 @@
                     <Button x:Name="ClearMeButton" DockPanel.Dock="Right"
                         Width="70" Height="20" Margin="2,4,8,4" Padding="0"
                         ToolTip="Clear Intel ME region" Click="ClearMe_Click">Clear ME</Button>
-                    <Button x:Name="WindowsKeySearchButton" DockPanel.Dock="Right"
-                        Width="62" Height="20" Margin="2,4,2,4" Padding="0"
-                        ToolTip="Find Windows key marker" Click="WindowsKeySearch_Click">Win
-                        Key</Button>
+                    <Button x:Name="WindowsKeyMenuButton" DockPanel.Dock="Right"
+                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
+                        ToolTip="BIOS tools" Click="WindowsKeyMenuButton_Click">Menu
+                        <Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
+                                <MenuItem Header="Merge BIOS" Click="MergeBios_Click" />
+                                <MenuItem Header="Split BIOS" Click="SplitBios_Click" />
+                                <Separator />
+                                <MenuItem Header="Acer">
+                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
+                                </MenuItem>
+                                <MenuItem Header="Asus">
+                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
+                                </MenuItem>
+                                <MenuItem Header="Dell">
+                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
+                                </MenuItem>
+                                <MenuItem Header="HP">
+                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
+                                </MenuItem>
+                                <MenuItem Header="Lenovo">
+                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
+                                </MenuItem>
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
                     <Button x:Name="HexSearchNextButton" DockPanel.Dock="Right" Width="24"
                         Height="20" Margin="2,4,2,4" Padding="0" ToolTip="Find next"
                         Click="HexSearchNext_Click">

@@ -120,7 +120,7 @@ public partial class MainWindow : Window
         _activeMemoryTab = new MemoryTabState(1, Bios1Tab, HexEditor, HexScrollBar, _buffer);
         _memoryTabs[Bios1Tab] = _activeMemoryTab;
         SearchHitsGrid.ItemsSource = _searchHits;
-        HexEditor.ClearBufferRequested += HexEditor_ClearBufferRequested;
+        WireHexEditorActions(HexEditor);
         HexEditor.SetBuffer(_buffer, OnHexCellChanged);
         UpdateHexScrollBar();
         Title = $"{AppName} v{AppVersion}";
@@ -346,7 +346,7 @@ public partial class MainWindow : Window
             Foreground = (Brush)FindResource("TextBrush")
         };
         editor.ScrollChanged += (_, args) => HexEditor_ScrollChanged(editor, args);
-        editor.ClearBufferRequested += HexEditor_ClearBufferRequested;
+        WireHexEditorActions(editor);
 
         var scrollBar = new ScrollBar
         {
@@ -374,6 +374,13 @@ public partial class MainWindow : Window
         var buffer = CreateBlankBuffer();
         editor.SetBuffer(buffer, OnHexCellChanged);
         return new MemoryTabState(index, tab, editor, scrollBar, buffer);
+    }
+
+    private void WireHexEditorActions(HexEditorView editor)
+    {
+        editor.ClearBufferRequested += HexEditor_ClearBufferRequested;
+        editor.MergeBiosRequested += (_, _) => MergeBios_Click(editor, new RoutedEventArgs());
+        editor.SplitBiosRequested += (_, _) => SplitBios_Click(editor, new RoutedEventArgs());
     }
 
     private bool ActivateMemoryTab(TabItem tab)
@@ -1096,6 +1103,76 @@ public partial class MainWindow : Window
 
     private async void WindowsKeySearch_Click(object sender, RoutedEventArgs e) => await RunWindowsKeySearchAsync();
 
+    private void MergeBios_Click(object sender, RoutedEventArgs e)
+    {
+        var memories = GetMemoryTabOptions().ToList();
+        if (memories.Count < 2)
+        {
+            MessageBox.Show(this, "Need at least 2 Memory tabs to merge.", "Merge BIOS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var dialog = new MergeBiosWindow(memories)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var selected = new[] { dialog.Bios1!, dialog.Bios2! };
+        var merged = MergeMemoryBuffers(selected);
+        var sourceName = UniqueMemoryTabFileName(MergedBiosFileNameFor(merged.Length));
+        var tab = AddMemoryTabWithBuffer(merged, sourceName);
+        MemoryTabControl.SelectedItem = tab;
+        AppendLog($"Merge BIOS completed: {string.Join(" + ", selected.Select(memory => memory.Label))} -> {MemoryTabLabel(_memoryTabs[tab].Index)} ({FormatBytes(merged.Length)})");
+        SaveCurrentBufferWithDialog(sourceName);
+    }
+
+    private void SplitBios_Click(object sender, RoutedEventArgs e)
+    {
+        var memories = GetMemoryTabOptions().ToList();
+        if (memories.Count == 0)
+        {
+            MessageBox.Show(this, "Select a Memory tab first.", "Split BIOS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var currentMemoryLabel = _activeMemoryTab is null ? null : MemoryTabLabel(_activeMemoryTab.Index);
+        var dialog = new SplitBiosWindow(memories, currentMemoryLabel)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var memory = dialog.Bios!;
+        var firstLength = dialog.File1Length;
+        var secondLength = dialog.File2Length;
+        var first = memory.Buffer[..firstLength].ToArray();
+        var second = memory.Buffer[firstLength..(firstLength + secondLength)].ToArray();
+        var fileName1 = UniqueMemoryTabFileName(SplitedBiosFileNameFor(first.Length));
+        var tab1 = AddMemoryTabWithBuffer(first, fileName1);
+        var fileName2 = UniqueMemoryTabFileName(SplitedBiosFileNameFor(second.Length));
+        var tab2 = AddMemoryTabWithBuffer(second, fileName2);
+        MemoryTabControl.SelectedItem = tab1;
+        AppendLog($"Split BIOS completed: {memory.Label} -> {MemoryTabLabel(_memoryTabs[tab1].Index)} ({FormatBytes(first.Length)}) + {MemoryTabLabel(_memoryTabs[tab2].Index)} ({FormatBytes(second.Length)})");
+        SaveCurrentBufferWithDialog(fileName1);
+        MemoryTabControl.SelectedItem = tab2;
+        SaveCurrentBufferWithDialog(fileName2);
+    }
+
+    private void WindowsKeyMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowsKeyMenuButton.ContextMenu.PlacementTarget = WindowsKeyMenuButton;
+        WindowsKeyMenuButton.ContextMenu.IsOpen = true;
+    }
+
     private async void HexReplace_Click(object sender, RoutedEventArgs e) => await RunReplaceDialogAsync();
 
     private void HexSearchClear_Click(object sender, RoutedEventArgs e)
@@ -1286,7 +1363,7 @@ public partial class MainWindow : Window
         HexSearchAllButton.IsEnabled = enabled;
         HexSearchNextButton.IsEnabled = enabled;
         HexReplaceButton.IsEnabled = enabled;
-        WindowsKeySearchButton.IsEnabled = enabled;
+        WindowsKeyMenuButton.IsEnabled = enabled;
     }
 
     private string CurrentHexSearchMode() => HexSearchModeCombo.SelectedItem as string ?? "Offset";
@@ -2053,7 +2130,7 @@ public partial class MainWindow : Window
     private void SaveCurrentBufferWithDialog(string? suggestedFileName = null)
     {
         var initialDirectory = SuggestedInitialDirectory();
-        var fileName = suggestedFileName ?? $"{CurrentChip().Name}.bin";
+        var fileName = suggestedFileName ?? SuggestedSaveFileName();
         var dialog = new SaveFileDialog
         {
             Filter = "Binary files (*.bin)|*.bin|ROM files (*.rom)|*.rom|All files (*.*)|*.*",
@@ -2080,6 +2157,52 @@ public partial class MainWindow : Window
         return !string.IsNullOrWhiteSpace(sourceFile) && Path.IsPathRooted(sourceFile)
             ? Path.GetDirectoryName(sourceFile) ?? Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)
             : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+    }
+
+    private string SuggestedSaveFileName()
+    {
+        var sourceFile = _activeMemoryTab?.SourceFileName;
+        return string.IsNullOrWhiteSpace(sourceFile)
+            ? $"{CurrentChip().Name}.bin"
+            : Path.GetFileName(sourceFile);
+    }
+
+    private string UniqueMemoryTabFileName(string fileName)
+    {
+        var directory = SuggestedInitialDirectory();
+        var usedNames = _memoryTabs.Values
+            .Select(tab => Path.GetFileName(tab.SourceFileName))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        var extension = Path.GetExtension(fileName);
+        var candidate = fileName;
+        var index = 2;
+        while (usedNames.Contains(candidate) || File.Exists(Path.Combine(directory, candidate)))
+        {
+            candidate = $"{stem}_{index}{extension}";
+            index++;
+        }
+
+        return candidate;
+    }
+
+    private static string MergedBiosFileNameFor(int bytes) =>
+        $"{FormatBinaryMegabytes(bytes)}_MERGED.bin";
+
+    private static string SplitedBiosFileNameFor(int bytes) =>
+        $"{FormatBinaryMegabytes(bytes)}_SPLITED.bin";
+
+    private static string FormatBinaryMegabytes(int bytes)
+    {
+        const int mib = 1024 * 1024;
+        if (bytes % mib == 0)
+        {
+            return $"{bytes / mib}MB";
+        }
+
+        return $"{bytes / (double)mib:0.##}MB";
     }
 
     private static string UniqueFileName(string directory, string fileName)
