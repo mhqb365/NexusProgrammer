@@ -24,13 +24,16 @@
     <Content Include="Assets\success.wav" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <Target Name="CopyMeaTools" AfterTargets="Build">
-    <RemoveDir Directories="$(TargetDir)MEA" />
+  <Target Name="CopyMeAnalyzerTools" AfterTargets="Build">
+    <RemoveDir Directories="$(TargetDir)MEAnalyzer" />
     <ItemGroup>
-      <MeaToolFiles Include="$(MSBuildProjectDirectory)\MEA\**\*" />
+      <MeAnalyzerToolFiles Include="$(MSBuildProjectDirectory)\MEAnalyzer\**\*" />
+      <MeAnalyzerToolFiles Remove="$(MSBuildProjectDirectory)\MEAnalyzer\build\**\*" />
+      <MeAnalyzerToolFiles Remove="$(MSBuildProjectDirectory)\MEAnalyzer\__pycache__\**\*" />
+      <MeAnalyzerToolFiles Remove="$(MSBuildProjectDirectory)\MEAnalyzer\*.spec" />
     </ItemGroup>
-    <Copy SourceFiles="@(MeaToolFiles)"
-      DestinationFiles="@(MeaToolFiles->'$(TargetDir)MEA\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(MeAnalyzerToolFiles)"
+      DestinationFiles="@(MeAnalyzerToolFiles->'$(TargetDir)MEAnalyzer\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
 
   <Target Name="BuildIcCatalog" AfterTargets="Build">

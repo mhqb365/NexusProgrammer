@@ -8,7 +8,8 @@ namespace NexusProgrammer;
 
 internal static partial class MeaAnalyzer
 {
-    private static readonly string MeaDirectory = Path.Combine(AppContext.BaseDirectory, "MEA");
+    private const string MeAnalyzerDirectoryName = "MEAnalyzer";
+    private static readonly string MeAnalyzerDirectory = Path.Combine(AppContext.BaseDirectory, MeAnalyzerDirectoryName);
     private static readonly byte[] IntelFlashDescriptorSignature = [0x5A, 0xA5, 0xF0, 0x0F];
     private static readonly byte[][] IntelFirmwareMarkers =
     [
@@ -20,10 +21,10 @@ internal static partial class MeaAnalyzer
 
     public static async Task<MeaAnalysisResult> AnalyzeAsync(byte[] buffer, CancellationToken cancellationToken = default)
     {
-        var meaExecutable = FindMeaExecutable();
-        if (meaExecutable is null)
+        var meaTool = FindMeaTool();
+        if (meaTool is null)
         {
-            return MeaAnalysisResult.Fail("MEA executable was not found.");
+            return MeaAnalysisResult.Fail("MEAnalyzer executable was not found. Build MEAnalyzer\\MEA.py to MEA.exe first.");
         }
 
         var tempRoot = Path.Combine(Path.GetTempPath(), $"nexus-mea-{Guid.NewGuid():N}");
@@ -33,7 +34,7 @@ internal static partial class MeaAnalyzer
 
         try
         {
-            var result = await RunMeaAsync(meaExecutable, $"\"{biosPath}\" -skip -exit -json -out \"{tempRoot}\"", tempRoot, cancellationToken);
+            var result = await RunMeaAsync(meaTool, biosPath, tempRoot, cancellationToken);
 
             var summary = Summarize(result.Output, tempRoot, biosPath, buffer);
             var info = ParseInfo(summary);
@@ -67,28 +68,27 @@ internal static partial class MeaAnalyzer
         return false;
     }
 
-    private static string? FindMeaExecutable()
+    private static string? FindMeaTool()
     {
-        if (!Directory.Exists(MeaDirectory))
+        if (!Directory.Exists(MeAnalyzerDirectory))
         {
             return null;
         }
 
-        return Directory.GetFiles(MeaDirectory, "*.exe")
-            .OrderByDescending(path => Path.GetFileName(path).Contains("MEA", StringComparison.OrdinalIgnoreCase))
-            .ThenBy(path => path)
-            .FirstOrDefault();
+        var executablePath = Path.Combine(MeAnalyzerDirectory, "MEA.exe");
+        return File.Exists(executablePath) ? executablePath : null;
     }
 
-    private static async Task<(int ExitCode, string Output)> RunMeaAsync(string fileName, string arguments, string workingDirectory, CancellationToken cancellationToken)
+    private static async Task<(int ExitCode, string Output)> RunMeaAsync(string executablePath, string biosPath, string outputDirectory, CancellationToken cancellationToken)
     {
+        var arguments = $"\"{biosPath}\" -skip -exit -json -out \"{outputDirectory}\"";
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = fileName,
+                FileName = executablePath,
                 Arguments = arguments,
-                WorkingDirectory = workingDirectory,
+                WorkingDirectory = MeAnalyzerDirectory,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
