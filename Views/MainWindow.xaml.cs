@@ -993,13 +993,13 @@ public partial class MainWindow : Window
             .OrderBy(tab => tab.Index)
             .Select(tab => new MemoryBufferOption(MemoryTabLabel(tab.Index), tab.Buffer.ToArray(), tab.SourceFileName));
 
-    private async Task ClearSingleBiosAsync(MemoryBufferOption memory, string meRegionPath, IReadOnlyList<string> fitPaths, Action<string> log, CancellationToken cancellationToken)
+    private async Task ClearSingleBiosAsync(MemoryBufferOption memory, IReadOnlyList<string> meRegionPaths, IReadOnlyList<string> fitPaths, bool allowManualFallback, Action<string> log, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         await RunDialogOperationAsync("Clear ME", null, async _ =>
         {
             log($"Clear ME request: {memory.Label}");
-            var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPath, fitPaths, log, cancellationToken);
+            var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPaths, fitPaths, log, cancellationToken, allowManualFallback);
             stopwatch.Stop();
             var tab = AddBiosTab();
             MemoryTabControl.SelectedItem = tab;
@@ -1025,7 +1025,7 @@ public partial class MainWindow : Window
         }, logCompletion: false, logger: log);
     }
 
-    private async Task ClearDualBiosAsync(MemoryBufferOption memory1, MemoryBufferOption memory2, string meRegionPath, IReadOnlyList<string> fitPaths, Action<string> log, CancellationToken cancellationToken)
+    private async Task ClearDualBiosAsync(MemoryBufferOption memory1, MemoryBufferOption memory2, IReadOnlyList<string> meRegionPaths, IReadOnlyList<string> fitPaths, bool allowManualFallback, Action<string> log, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         await RunDialogOperationAsync("Clear ME", null, async _ =>
@@ -1034,7 +1034,7 @@ public partial class MainWindow : Window
             var merged = new byte[memory1.Buffer.Length + memory2.Buffer.Length];
             Buffer.BlockCopy(memory1.Buffer, 0, merged, 0, memory1.Buffer.Length);
             Buffer.BlockCopy(memory2.Buffer, 0, merged, memory1.Buffer.Length, memory2.Buffer.Length);
-            var result = await ClearMeSingleBiosService.ClearAsync(merged, meRegionPath, fitPaths, log, cancellationToken);
+            var result = await ClearMeSingleBiosService.ClearAsync(merged, meRegionPaths, fitPaths, log, cancellationToken, allowManualFallback);
             stopwatch.Stop();
             if (result.Bios.Length <= memory1.Buffer.Length)
             {

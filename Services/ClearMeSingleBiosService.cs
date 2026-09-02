@@ -23,48 +23,108 @@ internal static class ClearMeSingleBiosService
         Action<string>? log = null,
         CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(meRegionPath))
-        {
-            throw new FileNotFoundException("ME Region file was not found.", meRegionPath);
-        }
+        return await ClearAsync(bios, [meRegionPath], fitPaths, log, cancellationToken);
+    }
 
-        var candidates = fitPaths
+    public static async Task<ClearMeResult> ClearAsync(
+        byte[] bios,
+        IReadOnlyList<string> meRegionPaths,
+        IReadOnlyList<string> fitPaths,
+        Action<string>? log = null,
+        CancellationToken cancellationToken = default,
+        bool allowManualFallback = true)
+    {
+        var meRegionCandidates = meRegionPaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (candidates.Count == 0)
+        if (meRegionCandidates.Count == 0)
+        {
+            throw new FileNotFoundException("ME Region file was not found.");
+        }
+
+        var fitCandidates = fitPaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (fitCandidates.Count == 0)
         {
             throw new FileNotFoundException("FIT executable was not found.");
         }
 
         var errors = new List<string>();
-        for (var index = 0; index < candidates.Count; index++)
+        for (var meIndex = 0; meIndex < meRegionCandidates.Count; meIndex++)
         {
-            var fitPath = candidates[index];
-            if (!File.Exists(fitPath))
+            var meRegionPath = meRegionCandidates[meIndex];
+            if (!File.Exists(meRegionPath))
             {
-                log?.Invoke($"Clear ME FIT skipped ({index + 1}/{candidates.Count}): {Path.GetFileName(fitPath)} not found");
-                errors.Add($"{Path.GetFileName(fitPath)}: FIT executable was not found.");
+                log?.Invoke($"Clear ME ME Region skipped ({meIndex + 1}/{meRegionCandidates.Count}): {Path.GetFileName(meRegionPath)} not found");
+                errors.Add($"{Path.GetFileName(meRegionPath)}: ME Region file was not found.");
                 continue;
             }
 
+            for (var fitIndex = 0; fitIndex < fitCandidates.Count; fitIndex++)
+            {
+                var fitPath = fitCandidates[fitIndex];
+                if (!File.Exists(fitPath))
+                {
+                    log?.Invoke($"Clear ME FIT skipped ({fitIndex + 1}/{fitCandidates.Count}): {Path.GetFileName(fitPath)} not found");
+                    errors.Add($"{Path.GetFileName(meRegionPath)} + {Path.GetFileName(fitPath)}: FIT executable was not found.");
+                    continue;
+                }
+
+                try
+                {
+                    log?.Invoke($"Clear ME attempt: ME Region {meIndex + 1}/{meRegionCandidates.Count}, FIT {fitIndex + 1}/{fitCandidates.Count}");
+                    log?.Invoke($"Clear ME ME Region: {Path.GetFileName(meRegionPath)}");
+                    log?.Invoke($"Clear ME FIT: {Path.GetFileName(fitPath)}");
+                    var result = await ClearWithFitAsync(bios, meRegionPath, fitPath, log, cancellationToken);
+                    log?.Invoke($"Clear ME succeeded: {Path.GetFileName(meRegionPath)} + {Path.GetFileName(fitPath)}");
+                    return result with
+                    {
+                        Summary =
+                            $"ME Region used: {Path.GetFileName(meRegionPath)}{Environment.NewLine}" +
+                            $"FIT used: {Path.GetFileName(fitPath)}{Environment.NewLine}" +
+                            result.Summary
+                    };
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    var error = CompactError(ex.Message);
+                    log?.Invoke($"Clear ME failed: {Path.GetFileName(meRegionPath)} + {Path.GetFileName(fitPath)} - {error}");
+                    errors.Add($"{Path.GetFileName(meRegionPath)} + {Path.GetFileName(fitPath)}: {error}");
+                }
+            }
+        }
+
+        var manualMeRegionPath = allowManualFallback ? meRegionCandidates.FirstOrDefault(File.Exists) : null;
+        if (!allowManualFallback)
+        {
+            log?.Invoke("Clear ME manual replacement fallback disabled by user.");
+        }
+
+        if (manualMeRegionPath is not null)
+        {
             try
             {
-                log?.Invoke($"Clear ME FIT attempt ({index + 1}/{candidates.Count}): {Path.GetFileName(fitPath)}");
-                var result = await ClearWithFitAsync(bios, meRegionPath, fitPath, log, cancellationToken);
-                log?.Invoke($"Clear ME FIT succeeded: {Path.GetFileName(fitPath)}");
-                return result with { Summary = $"FIT used: {Path.GetFileName(fitPath)}{Environment.NewLine}{result.Summary}" };
+                log?.Invoke($"Clear ME FIT fallback failed; replacing ME region manually with first candidate: {Path.GetFileName(manualMeRegionPath)}");
+                return ReplaceMeRegionManually(bios, manualMeRegionPath, log) with
+                {
+                    Summary =
+                        $"ME Region used: {Path.GetFileName(manualMeRegionPath)}{Environment.NewLine}" +
+                        "FIT used: manual replacement fallback"
+                };
             }
-            catch (Exception ex) when (candidates.Count > 1 && ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 var error = CompactError(ex.Message);
-                log?.Invoke($"Clear ME FIT failed: {Path.GetFileName(fitPath)} - {error}");
-                errors.Add($"{Path.GetFileName(fitPath)}: {error}");
+                log?.Invoke($"Clear ME manual replacement failed: {Path.GetFileName(manualMeRegionPath)} - {error}");
+                errors.Add($"{Path.GetFileName(manualMeRegionPath)} + manual replacement: {error}");
             }
         }
 
         throw new InvalidOperationException(
-            "Clear ME failed with all FIT candidates:" +
+            "Clear ME failed with all ME Region and FIT candidates:" +
             Environment.NewLine +
             string.Join(Environment.NewLine, errors));
     }
@@ -295,6 +355,32 @@ internal static class ClearMeSingleBiosService
         var repairedPath = Path.Combine(workingDirectory, "input_me_fs_repaired.bin");
         File.WriteAllBytes(repairedPath, data);
         return new RepairedInput(repairedPath, region);
+    }
+
+    private static ClearMeResult ReplaceMeRegionManually(byte[] bios, string meRegionPath, Action<string>? log)
+    {
+        var data = bios.ToArray();
+        var meRegion = File.ReadAllBytes(meRegionPath);
+        var region = IntelFlashDescriptorRegion(data, 2, "ME");
+        if (region.Offset + meRegion.Length > data.Length)
+        {
+            throw new InvalidOperationException(
+                $"Selected ME Region exceeds BIOS image bounds ({region.Offset + meRegion.Length} > {data.Length} bytes).");
+        }
+
+        if (meRegion.Length > region.Size)
+        {
+            log?.Invoke($"Selected ME Region is larger than BIOS ME region ({meRegion.Length} > {region.Size} bytes). Writing full ME Region and overwriting following bytes.");
+        }
+
+        Array.Fill<byte>(data, 0xFF, region.Offset, region.Size);
+        Buffer.BlockCopy(meRegion, 0, data, region.Offset, meRegion.Length);
+        log?.Invoke($"Clear ME manual replacement completed: ME offset 0x{region.Offset:X}, size {region.Size} bytes");
+        return new ClearMeResult(
+            data,
+            $"Manual ME replacement: {Path.GetFileName(meRegionPath)}{Environment.NewLine}" +
+            $"ME region offset: 0x{region.Offset:X}{Environment.NewLine}" +
+            $"ME region size: {region.Size} bytes");
     }
 
     private static FlashRegion IntelFlashDescriptorRegion(byte[] buffer, int regionIndex, string name)

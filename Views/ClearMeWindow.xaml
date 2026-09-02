@@ -27,6 +27,7 @@
                         <RowDefinition Height="30" />
                         <RowDefinition Height="30" />
                         <RowDefinition Height="30" />
+                        <RowDefinition Height="30" />
                         <RowDefinition Height="40" />
                     </Grid.RowDefinitions>
 
@@ -51,7 +52,12 @@
                     <Button Grid.Row="2" Grid.Column="2" Height="24" Margin="0,0,0,6"
                         Click="BrowseFit_Click">Browse...</Button>
 
-                    <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                    <CheckBox x:Name="ManualFallbackCheckBox" Grid.Row="3" Grid.Column="1"
+                        Grid.ColumnSpan="2"
+                        IsChecked="True" Margin="0,2,0,6" VerticalAlignment="Center"
+                        Content="If all attempts fail, replace ME Region manually" />
+
+                    <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
                         Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
                         <Button x:Name="AnalyzeSingleButton" Width="90" Height="26"
                             Margin="0,0,8,0" Click="AnalyzeSingle_Click">Analyze BIOS</Button>
@@ -71,6 +77,7 @@
                         <ColumnDefinition Width="86" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="30" />
                         <RowDefinition Height="30" />
                         <RowDefinition Height="30" />
                         <RowDefinition Height="30" />
@@ -104,7 +111,12 @@
                     <Button Grid.Row="3" Grid.Column="2" Height="24" Margin="0,0,0,6"
                         Click="BrowseDualFit_Click">Browse...</Button>
 
-                    <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
+                    <CheckBox x:Name="DualManualFallbackCheckBox" Grid.Row="4" Grid.Column="1"
+                        Grid.ColumnSpan="2"
+                        IsChecked="True" Margin="0,2,0,6" VerticalAlignment="Center"
+                        Content="If all attempts fail, replace ME Region manually" />
+
+                    <StackPanel Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2"
                         Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
                         <Button x:Name="AnalyzeDualButton" Width="90" Height="26"
                             Margin="0,0,8,0" Click="AnalyzeDual_Click">Analyze BIOS</Button>

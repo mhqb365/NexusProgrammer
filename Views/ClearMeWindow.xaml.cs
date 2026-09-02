@@ -6,15 +6,15 @@ namespace NexusProgrammer;
 
 public partial class ClearMeWindow : Window
 {
-    private readonly Func<MemoryBufferOption, string, IReadOnlyList<string>, Action<string>, CancellationToken, Task> _clearSingleBios;
-    private readonly Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, Action<string>, CancellationToken, Task> _clearDualBios;
+    private readonly Func<MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, Action<string>, CancellationToken, Task> _clearSingleBios;
+    private readonly Func<MemoryBufferOption, MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, Action<string>, CancellationToken, Task> _clearDualBios;
     private readonly Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> _analyzeBios;
     private readonly AppSettings _settings;
 
     public ClearMeWindow(
         IEnumerable<MemoryBufferOption> memoryTabs,
-        Func<MemoryBufferOption, string, IReadOnlyList<string>, Action<string>, CancellationToken, Task> clearSingleBios,
-        Func<MemoryBufferOption, MemoryBufferOption, string, IReadOnlyList<string>, Action<string>, CancellationToken, Task> clearDualBios,
+        Func<MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, Action<string>, CancellationToken, Task> clearSingleBios,
+        Func<MemoryBufferOption, MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, Action<string>, CancellationToken, Task> clearDualBios,
         Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> analyzeBios,
         AppSettings settings,
         ClearMeCandidates candidates)
@@ -65,7 +65,7 @@ public partial class ClearMeWindow : Window
 
     private void ApplyTabHeight()
     {
-        ClearMeTabs.Height = ClearMeTabs.SelectedIndex == 1 ? 205 : 175;
+        ClearMeTabs.Height = ClearMeTabs.SelectedIndex == 1 ? 235 : 205;
     }
 
     private void ClearMemory_Click(object sender, RoutedEventArgs e)
@@ -259,9 +259,9 @@ public partial class ClearMeWindow : Window
             return;
         }
 
-        var meRegion = SelectedPath(MeRegionCombo);
+        var meRegions = SelectedMeRegionPaths(MeRegionCombo);
         var fitCandidates = SelectedFitPaths(FitCombo);
-        if (string.IsNullOrWhiteSpace(meRegion) || fitCandidates.Count == 0)
+        if (meRegions.Count == 0 || fitCandidates.Count == 0)
         {
             MessageBox.Show(this, "Select ME Region and FIT first.", "Clear ME", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -271,7 +271,7 @@ public partial class ClearMeWindow : Window
         _clearMeCts = new CancellationTokenSource();
         try
         {
-            await _clearSingleBios(memory, meRegion, fitCandidates, AppendClearMeLog, _clearMeCts.Token);
+            await _clearSingleBios(memory, meRegions, fitCandidates, ManualFallbackCheckBox.IsChecked == true, AppendClearMeLog, _clearMeCts.Token);
             Close();
         }
         catch (OperationCanceledException)
@@ -290,6 +290,22 @@ public partial class ClearMeWindow : Window
 
     private static string SelectedPath(System.Windows.Controls.ComboBox comboBox) =>
         comboBox.SelectedItem is FilePathOption option ? option.Path : comboBox.Text.Trim();
+
+    private static IReadOnlyList<string> SelectedMeRegionPaths(System.Windows.Controls.ComboBox comboBox)
+    {
+        var selected = SelectedPath(comboBox);
+        if (string.IsNullOrWhiteSpace(selected))
+        {
+            return [];
+        }
+
+        var fallbacks = comboBox.Items
+            .OfType<FilePathOption>()
+            .Select(option => option.Path)
+            .Where(path => !path.Equals(selected, StringComparison.OrdinalIgnoreCase));
+
+        return [selected, .. fallbacks];
+    }
 
     private static IReadOnlyList<string> SelectedFitPaths(System.Windows.Controls.ComboBox comboBox)
     {
@@ -337,9 +353,9 @@ public partial class ClearMeWindow : Window
             return;
         }
 
-        var meRegion = SelectedPath(DualMeRegionCombo);
+        var meRegions = SelectedMeRegionPaths(DualMeRegionCombo);
         var fitCandidates = SelectedFitPaths(DualFitCombo);
-        if (string.IsNullOrWhiteSpace(meRegion) || fitCandidates.Count == 0)
+        if (meRegions.Count == 0 || fitCandidates.Count == 0)
         {
             MessageBox.Show(this, "Select ME Region and FIT first.", "Clear ME", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -349,7 +365,7 @@ public partial class ClearMeWindow : Window
         _clearMeCts = new CancellationTokenSource();
         try
         {
-            await _clearDualBios(memory1, memory2, meRegion, fitCandidates, AppendClearMeLog, _clearMeCts.Token);
+            await _clearDualBios(memory1, memory2, meRegions, fitCandidates, DualManualFallbackCheckBox.IsChecked == true, AppendClearMeLog, _clearMeCts.Token);
             Close();
         }
         catch (OperationCanceledException)
