@@ -52,10 +52,15 @@
                     <Button Grid.Row="2" Grid.Column="2" Height="24" Margin="0,0,0,6"
                         Click="BrowseFit_Click">Browse...</Button>
 
-                    <CheckBox x:Name="ManualFallbackCheckBox" Grid.Row="3" Grid.Column="1"
-                        Grid.ColumnSpan="2"
-                        IsChecked="True" Margin="0,2,0,6" VerticalAlignment="Center"
-                        Content="If all attempts fail, replace ME Region manually" />
+                    <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                        Orientation="Horizontal" Margin="0,2,0,6" VerticalAlignment="Center">
+                        <CheckBox x:Name="AutoRetryWithAllCheckBox"
+                            IsChecked="False" Margin="0,0,18,0"
+                            Content="Auto retry with all" />
+                        <CheckBox x:Name="ManualFallbackCheckBox"
+                            IsChecked="True"
+                            Content="If all attempts fail, replace ME Region manually" />
+                    </StackPanel>
 
                     <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
                         Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
@@ -111,10 +116,15 @@
                     <Button Grid.Row="3" Grid.Column="2" Height="24" Margin="0,0,0,6"
                         Click="BrowseDualFit_Click">Browse...</Button>
 
-                    <CheckBox x:Name="DualManualFallbackCheckBox" Grid.Row="4" Grid.Column="1"
-                        Grid.ColumnSpan="2"
-                        IsChecked="True" Margin="0,2,0,6" VerticalAlignment="Center"
-                        Content="If all attempts fail, replace ME Region manually" />
+                    <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
+                        Orientation="Horizontal" Margin="0,2,0,6" VerticalAlignment="Center">
+                        <CheckBox x:Name="DualAutoRetryWithAllCheckBox"
+                            IsChecked="False" Margin="0,0,18,0"
+                            Content="Auto retry with all" />
+                        <CheckBox x:Name="DualManualFallbackCheckBox"
+                            IsChecked="True"
+                            Content="If all attempts fail, replace ME Region manually" />
+                    </StackPanel>
 
                     <StackPanel Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2"
                         Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">

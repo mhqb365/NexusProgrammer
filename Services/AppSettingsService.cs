@@ -9,6 +9,8 @@ public sealed class AppSettings
     public string FitRoot { get; set; } = string.Empty;
     public bool SoundEnabled { get; set; } = true;
     public string ThemeName { get; set; } = ThemeService.DefaultThemeName;
+    public bool ClearMeAutoRetryWithAll { get; set; }
+    public bool ClearMeManualReplacementFallback { get; set; } = true;
 }
 
 internal static class AppSettingsService

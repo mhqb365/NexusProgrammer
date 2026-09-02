@@ -19,7 +19,10 @@ internal static partial class MeaAnalyzer
         Encoding.ASCII.GetBytes("Intel(R) ME")
     ];
 
-    public static async Task<MeaAnalysisResult> AnalyzeAsync(byte[] buffer, CancellationToken cancellationToken = default)
+    public static async Task<MeaAnalysisResult> AnalyzeAsync(byte[] buffer, CancellationToken cancellationToken = default) =>
+        await AnalyzeAsync(buffer, string.Empty, cancellationToken);
+
+    public static async Task<MeaAnalysisResult> AnalyzeAsync(byte[] buffer, string sourceFileName, CancellationToken cancellationToken = default)
     {
         var meaTool = FindMeaTool();
         if (meaTool is null)
@@ -29,7 +32,7 @@ internal static partial class MeaAnalyzer
 
         var tempRoot = Path.Combine(Path.GetTempPath(), $"nexus-mea-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempRoot);
-        var biosPath = Path.Combine(tempRoot, "bios.bin");
+        var biosPath = Path.Combine(tempRoot, SafeInputFileName(sourceFileName));
         await File.WriteAllBytesAsync(biosPath, buffer, cancellationToken);
 
         try
@@ -46,6 +49,22 @@ internal static partial class MeaAnalyzer
         {
             TryDeleteDirectory(tempRoot);
         }
+    }
+
+    private static string SafeInputFileName(string sourceFileName)
+    {
+        var name = Path.GetFileName(sourceFileName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "bios.bin";
+        }
+
+        foreach (var invalid in Path.GetInvalidFileNameChars())
+        {
+            name = name.Replace(invalid, '_');
+        }
+
+        return name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) ? name : $"{name}.bin";
     }
 
     public static bool IsLikelyIntelFirmware(byte[] buffer)
@@ -128,7 +147,11 @@ internal static partial class MeaAnalyzer
             return "MEA completed with no console output.";
         }
 
-        var tableSummary = FormatPlatoMeaSummary(lines);
+        var tableSummary = FormatUnicodeMeaSummary(lines);
+        if (tableSummary.Length == 0)
+        {
+            tableSummary = FormatPlatoMeaSummary(lines);
+        }
         var meaSummary = tableSummary.Length > 0 ? tableSummary : FormatLegacyMeaSummary(lines);
         return AddBiosIdentity(meaSummary, buffer);
     }
@@ -155,17 +178,47 @@ internal static partial class MeaAnalyzer
             JsonElement? firmware = null;
             foreach (var fileProperty in document.RootElement.EnumerateObject())
             {
-                if (fileProperty.Value.ValueKind != JsonValueKind.Object ||
-                    !fileProperty.Value.TryGetProperty("Management Engine", out var engineArray) ||
-                    engineArray.ValueKind != JsonValueKind.Array ||
-                    engineArray.GetArrayLength() == 0)
+                if (fileProperty.Value.ValueKind != JsonValueKind.Object)
                 {
                     continue;
                 }
 
-                managementEngine = engineArray[0];
-                firmware = fileProperty.Value;
-                break;
+                foreach (var section in fileProperty.Value.EnumerateObject())
+                {
+                    if (section.Value.ValueKind != JsonValueKind.Array || section.Value.GetArrayLength() == 0)
+                    {
+                        continue;
+                    }
+
+                    foreach (var item in section.Value.EnumerateArray())
+                    {
+                        if (item.ValueKind != JsonValueKind.Object)
+                        {
+                            continue;
+                        }
+
+                        var family = JsonValue(item, "Family") ?? section.Name;
+                        if (!family.Contains("ME", StringComparison.OrdinalIgnoreCase) &&
+                            !section.Name.Contains("Management Engine", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        managementEngine = item;
+                        firmware = fileProperty.Value;
+                        break;
+                    }
+
+                    if (managementEngine is not null)
+                    {
+                        break;
+                    }
+                }
+
+                if (managementEngine is not null)
+                {
+                    break;
+                }
             }
 
             if (managementEngine is null)
@@ -276,6 +329,62 @@ internal static partial class MeaAnalyzer
         return string.Join(Environment.NewLine, summary);
     }
 
+    private static string FormatUnicodeMeaSummary(IReadOnlyList<string> lines)
+    {
+        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var insideTable = false;
+        var sawDataRow = false;
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("╔", StringComparison.Ordinal))
+            {
+                if (sawDataRow)
+                {
+                    break;
+                }
+
+                insideTable = true;
+                continue;
+            }
+
+            if (!insideTable)
+            {
+                continue;
+            }
+
+            if (line.StartsWith("╚", StringComparison.Ordinal))
+            {
+                if (sawDataRow)
+                {
+                    break;
+                }
+
+                insideTable = false;
+                continue;
+            }
+
+            if (!line.Contains('│'))
+            {
+                continue;
+            }
+
+            var cells = line.Trim('║', ' ', '╟', '╢').Split('│')
+                .Select(cell => cell.Trim())
+                .Where(cell => cell.Length > 0)
+                .ToArray();
+            if (cells.Length < 2)
+            {
+                continue;
+            }
+
+            sawDataRow = true;
+            fields.TryAdd(cells[0], cells[^1]);
+        }
+
+        return FormatMeaFields(fields);
+    }
+
     private static string FormatPlatoMeaSummary(IReadOnlyList<string> lines)
     {
         var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -329,6 +438,11 @@ internal static partial class MeaAnalyzer
             fields.TryAdd(cells[0], cells[^1]);
         }
 
+        return FormatMeaFields(fields);
+    }
+
+    private static string FormatMeaFields(IReadOnlyDictionary<string, string> fields)
+    {
         var version = GetField(fields, "Version");
         var fit = GetField(fields, "Flash Image Tool");
         if (string.IsNullOrWhiteSpace(version) && string.IsNullOrWhiteSpace(fit))

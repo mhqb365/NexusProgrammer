@@ -32,7 +32,8 @@ internal static class ClearMeSingleBiosService
         IReadOnlyList<string> fitPaths,
         Action<string>? log = null,
         CancellationToken cancellationToken = default,
-        bool allowManualFallback = true)
+        bool allowManualFallback = true,
+        bool requiresFit = true)
     {
         var meRegionCandidates = meRegionPaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -41,6 +42,23 @@ internal static class ClearMeSingleBiosService
         if (meRegionCandidates.Count == 0)
         {
             throw new FileNotFoundException("ME Region file was not found.");
+        }
+
+        if (!requiresFit)
+        {
+            var legacyMeRegionPath = meRegionCandidates.FirstOrDefault(File.Exists);
+            if (legacyMeRegionPath is null)
+            {
+                throw new FileNotFoundException("ME Region file was not found.");
+            }
+
+            log?.Invoke($"Clear ME legacy ME 1-10: replacing ME region manually with {Path.GetFileName(legacyMeRegionPath)}");
+            return ReplaceMeRegionManually(bios, legacyMeRegionPath, log) with
+            {
+                Summary =
+                    $"ME Region used: {Path.GetFileName(legacyMeRegionPath)}{Environment.NewLine}" +
+                    "FIT used: not required for legacy ME 1-10"
+            };
         }
 
         var fitCandidates = fitPaths
@@ -53,6 +71,7 @@ internal static class ClearMeSingleBiosService
         }
 
         var errors = new List<string>();
+        ClearMeResult? meFileSystemFallback = null;
         for (var meIndex = 0; meIndex < meRegionCandidates.Count; meIndex++)
         {
             var meRegionPath = meRegionCandidates[meIndex];
@@ -78,7 +97,7 @@ internal static class ClearMeSingleBiosService
                     log?.Invoke($"Clear ME attempt: ME Region {meIndex + 1}/{meRegionCandidates.Count}, FIT {fitIndex + 1}/{fitCandidates.Count}");
                     log?.Invoke($"Clear ME ME Region: {Path.GetFileName(meRegionPath)}");
                     log?.Invoke($"Clear ME FIT: {Path.GetFileName(fitPath)}");
-                    var result = await ClearWithFitAsync(bios, meRegionPath, fitPath, log, cancellationToken);
+                    var result = await ClearWithFitAsync(bios, meRegionPath, fitPath, allowManualFallback, log, cancellationToken);
                     log?.Invoke($"Clear ME succeeded: {Path.GetFileName(meRegionPath)} + {Path.GetFileName(fitPath)}");
                     return result with
                     {
@@ -90,11 +109,22 @@ internal static class ClearMeSingleBiosService
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    if (ex is MeFileSystemFallbackException fallbackException && meFileSystemFallback is null)
+                    {
+                        meFileSystemFallback = fallbackException.Result;
+                    }
+
                     var error = CompactError(ex.Message);
                     log?.Invoke($"Clear ME failed: {Path.GetFileName(meRegionPath)} + {Path.GetFileName(fitPath)} - {error}");
                     errors.Add($"{Path.GetFileName(meRegionPath)} + {Path.GetFileName(fitPath)}: {error}");
                 }
             }
+        }
+
+        if (allowManualFallback && meFileSystemFallback is not null)
+        {
+            log?.Invoke("Clear ME using ME-replaced BIOS because all FIT candidates failed after MFS/EFS repair.");
+            return meFileSystemFallback;
         }
 
         var manualMeRegionPath = allowManualFallback ? meRegionCandidates.FirstOrDefault(File.Exists) : null;
@@ -133,6 +163,7 @@ internal static class ClearMeSingleBiosService
         byte[] bios,
         string meRegionPath,
         string fitPath,
+        bool allowManualFallback,
         Action<string>? log,
         CancellationToken cancellationToken)
     {
@@ -154,25 +185,63 @@ internal static class ClearMeSingleBiosService
                 ? outputPath
                 : FindBuiltImage(tempRoot, Path.GetDirectoryName(fitPath));
             var failedFileSystem = FailedMeFileSystem(build.Output);
-            if (builtPath is null && build.ExitCode != 0 && failedFileSystem is not null)
+            if (build.ExitCode != 0 && failedFileSystem is not null && !allowManualFallback)
             {
-                log?.Invoke($"Clear ME FIT failed to initialize {failedFileSystem}; repairing ME region input");
-                build = await RetryWithRepairedMeFileSystemAsync(
+                log?.Invoke($"Clear ME FIT failed to initialize {failedFileSystem}; manual ME replacement is disabled by user.");
+                throw new InvalidOperationException(SummarizeFitError(build.Output));
+            }
+
+            if (build.ExitCode != 0 && failedFileSystem is not null)
+            {
+                log?.Invoke($"Clear ME FIT failed to initialize {failedFileSystem}; replacing ME region before FIT retry");
+                var repairedInput = CreateMeFileSystemRepairedInput(inputPath, meRegionCopy, tempRoot, log);
+                log?.Invoke($"Clear ME repair input: ME offset 0x{repairedInput.Region.Offset:X}, size {repairedInput.Region.Size} bytes");
+                log?.Invoke($"Clear ME FIT retry after ME replacement: {Path.GetFileName(fitPath)}");
+
+                if (File.Exists(outputPath))
+                {
+                    File.Delete(outputPath);
+                }
+
+                var retry = await RunFitBuildAsync(
                     usesModularFit,
                     fitPath,
-                    inputPath,
-                    meRegionCopy,
+                    repairedInput.Path,
+                    null,
                     outputPath,
                     tempRoot,
-                    failedFileSystem,
-                    build.Output,
-                    log,
                     cancellationToken);
-                builtPath = File.Exists(outputPath)
+                var retryBuiltPath = File.Exists(outputPath)
                     ? outputPath
                     : FindBuiltImage(tempRoot, Path.GetDirectoryName(fitPath));
+                if (retry.ExitCode == 0 && retryBuiltPath is not null)
+                {
+                    build = retry with
+                    {
+                        Output = string.Join(Environment.NewLine,
+                            build.Output,
+                            $"FIT failed to initialize {failedFileSystem}; retried with replaced ME region input.",
+                            $"ME region offset 0x{repairedInput.Region.Offset:X}, size {repairedInput.Region.Size} bytes.",
+                            retry.Output)
+                    };
+                    builtPath = retryBuiltPath;
+                }
+                else
+                {
+                    log?.Invoke($"Clear ME FIT retry after ME replacement failed: {Path.GetFileName(fitPath)} - {FirstLine(SummarizeFitError(retry.Output))}");
+                    var repairedImage = await File.ReadAllBytesAsync(repairedInput.Path, cancellationToken);
+                    var fallback = new ClearMeResult(
+                        repairedImage,
+                        string.Join(Environment.NewLine,
+                            $"FIT failed to initialize {failedFileSystem}.",
+                            "ME Region was replaced manually before FIT retry.",
+                            "FIT retry still failed; saved ME-replaced BIOS as fallback result.",
+                            $"ME region offset: 0x{repairedInput.Region.Offset:X}",
+                            $"ME region size: {repairedInput.Region.Size} bytes"));
+                    throw new MeFileSystemFallbackException(fallback);
+                }
             }
-            if (build.ExitCode != 0 && builtPath is null)
+            if (build.ExitCode != 0)
             {
                 throw new InvalidOperationException(SummarizeFitError(build.Output));
             }
@@ -209,61 +278,6 @@ internal static class ClearMeSingleBiosService
         return usesModularFit
             ? RunModularFitAsync(fitPath, inputPath, meRegionPath, outputPath, workingDirectory, cancellationToken)
             : RunClassicFitAsync(fitPath, inputPath, meRegionPath, outputPath, workingDirectory, cancellationToken);
-    }
-
-    private static async Task<FitRunResult> RetryWithRepairedMeFileSystemAsync(
-        bool usesModularFit,
-        string fitPath,
-        string inputPath,
-        string meRegionPath,
-        string outputPath,
-        string workingDirectory,
-        string failedFileSystem,
-        string firstOutput,
-        Action<string>? log,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
-
-            var repairedInput = CreateMeFileSystemRepairedInput(inputPath, meRegionPath, workingDirectory, log);
-            log?.Invoke($"Clear ME repair input: ME offset 0x{repairedInput.Region.Offset:X}, size {repairedInput.Region.Size} bytes");
-            log?.Invoke($"Clear ME FIT retry after repair: {Path.GetFileName(fitPath)}");
-            var retry = await RunFitBuildAsync(
-                usesModularFit,
-                fitPath,
-                repairedInput.Path,
-                null,
-                outputPath,
-                workingDirectory,
-                cancellationToken);
-            if (retry.ExitCode != 0)
-            {
-                log?.Invoke($"Clear ME FIT retry after repair failed: {Path.GetFileName(fitPath)} - {FirstLine(SummarizeFitError(retry.Output))}");
-            }
-
-            return retry with
-            {
-                Output = string.Join(Environment.NewLine,
-                    firstOutput,
-                    $"FIT failed to initialize {failedFileSystem}; retried with repaired ME region input.",
-                    $"ME region offset 0x{repairedInput.Region.Offset:X}, size {repairedInput.Region.Size} bytes.",
-                    retry.Output)
-            };
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            log?.Invoke($"Clear ME repair retry skipped: {ex.Message}");
-            return new FitRunResult(
-                2,
-                string.Join(Environment.NewLine,
-                    firstOutput,
-                    $"ME file system repair retry was skipped: {ex.Message}"));
-        }
     }
 
     private static async Task<FitRunResult> RunClassicFitAsync(
@@ -584,6 +598,11 @@ internal static class ClearMeSingleBiosService
     private sealed record FlashRegion(string Name, int Offset, int Size);
 
     private sealed record RepairedInput(string Path, FlashRegion Region);
+
+    private sealed class MeFileSystemFallbackException(ClearMeResult result) : Exception(result.Summary)
+    {
+        public ClearMeResult Result { get; } = result;
+    }
 }
 
 internal sealed record ClearMeResult(byte[] Bios, string Summary);

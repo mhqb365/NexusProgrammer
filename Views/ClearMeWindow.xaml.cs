@@ -6,15 +6,15 @@ namespace NexusProgrammer;
 
 public partial class ClearMeWindow : Window
 {
-    private readonly Func<MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, Action<string>, CancellationToken, Task> _clearSingleBios;
-    private readonly Func<MemoryBufferOption, MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, Action<string>, CancellationToken, Task> _clearDualBios;
+    private readonly Func<MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, bool, Action<string>, CancellationToken, Task> _clearSingleBios;
+    private readonly Func<MemoryBufferOption, MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, bool, Action<string>, CancellationToken, Task> _clearDualBios;
     private readonly Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> _analyzeBios;
     private readonly AppSettings _settings;
 
     public ClearMeWindow(
         IEnumerable<MemoryBufferOption> memoryTabs,
-        Func<MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, Action<string>, CancellationToken, Task> clearSingleBios,
-        Func<MemoryBufferOption, MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, Action<string>, CancellationToken, Task> clearDualBios,
+        Func<MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, bool, Action<string>, CancellationToken, Task> clearSingleBios,
+        Func<MemoryBufferOption, MemoryBufferOption, IReadOnlyList<string>, IReadOnlyList<string>, bool, bool, Action<string>, CancellationToken, Task> clearDualBios,
         Func<IReadOnlyList<MemoryBufferOption>, Task<ClearMeCandidates>> analyzeBios,
         AppSettings settings,
         ClearMeCandidates candidates)
@@ -38,6 +38,10 @@ public partial class ClearMeWindow : Window
         FitCombo.DisplayMemberPath = nameof(FilePathOption.Name);
         DualMeRegionCombo.DisplayMemberPath = nameof(FilePathOption.Name);
         DualFitCombo.DisplayMemberPath = nameof(FilePathOption.Name);
+        AutoRetryWithAllCheckBox.IsChecked = _settings.ClearMeAutoRetryWithAll;
+        DualAutoRetryWithAllCheckBox.IsChecked = _settings.ClearMeAutoRetryWithAll;
+        ManualFallbackCheckBox.IsChecked = _settings.ClearMeManualReplacementFallback;
+        DualManualFallbackCheckBox.IsChecked = _settings.ClearMeManualReplacementFallback;
         MemoryCombo.SelectionChanged += (_, _) => UpdateClearMeButton();
         MeRegionCombo.SelectionChanged += (_, _) => UpdateClearMeButton();
         FitCombo.SelectionChanged += (_, _) => UpdateClearMeButton();
@@ -45,6 +49,14 @@ public partial class ClearMeWindow : Window
         DualMemory2Combo.SelectionChanged += (_, _) => UpdateClearMeButton();
         DualMeRegionCombo.SelectionChanged += (_, _) => UpdateClearMeButton();
         DualFitCombo.SelectionChanged += (_, _) => UpdateClearMeButton();
+        AutoRetryWithAllCheckBox.Checked += AutoRetryWithAll_Changed;
+        AutoRetryWithAllCheckBox.Unchecked += AutoRetryWithAll_Changed;
+        DualAutoRetryWithAllCheckBox.Checked += AutoRetryWithAll_Changed;
+        DualAutoRetryWithAllCheckBox.Unchecked += AutoRetryWithAll_Changed;
+        ManualFallbackCheckBox.Checked += ManualFallback_Changed;
+        ManualFallbackCheckBox.Unchecked += ManualFallback_Changed;
+        DualManualFallbackCheckBox.Checked += ManualFallback_Changed;
+        DualManualFallbackCheckBox.Unchecked += ManualFallback_Changed;
         LoadCandidateLists(candidates);
 
         ApplyTabHeight();
@@ -52,6 +64,29 @@ public partial class ClearMeWindow : Window
     }
 
     private CancellationTokenSource? _clearMeCts;
+    private bool _requiresFit = true;
+
+    private void AutoRetryWithAll_Changed(object sender, RoutedEventArgs e)
+    {
+        var value = sender == DualAutoRetryWithAllCheckBox
+            ? DualAutoRetryWithAllCheckBox.IsChecked == true
+            : AutoRetryWithAllCheckBox.IsChecked == true;
+        AutoRetryWithAllCheckBox.IsChecked = value;
+        DualAutoRetryWithAllCheckBox.IsChecked = value;
+        _settings.ClearMeAutoRetryWithAll = value;
+        AppSettingsService.Save(_settings);
+    }
+
+    private void ManualFallback_Changed(object sender, RoutedEventArgs e)
+    {
+        var value = sender == DualManualFallbackCheckBox
+            ? DualManualFallbackCheckBox.IsChecked == true
+            : ManualFallbackCheckBox.IsChecked == true;
+        ManualFallbackCheckBox.IsChecked = value;
+        DualManualFallbackCheckBox.IsChecked = value;
+        _settings.ClearMeManualReplacementFallback = value;
+        AppSettingsService.Save(_settings);
+    }
 
     private void ClearMeTabs_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
@@ -149,17 +184,20 @@ public partial class ClearMeWindow : Window
         ClearMeButton.IsEnabled =
             MemoryCombo.SelectedItem is MemoryBufferOption &&
             MeRegionCombo.SelectedItem is FilePathOption &&
-            FitCombo.SelectedItem is FilePathOption;
+            (!_requiresFit || FitCombo.SelectedItem is FilePathOption);
         ClearDualMeButton.IsEnabled =
             DualMemory1Combo.SelectedItem is MemoryBufferOption memory1 &&
             DualMemory2Combo.SelectedItem is MemoryBufferOption memory2 &&
             !ReferenceEquals(memory1, memory2) &&
             DualMeRegionCombo.SelectedItem is FilePathOption &&
-            DualFitCombo.SelectedItem is FilePathOption;
+            (!_requiresFit || DualFitCombo.SelectedItem is FilePathOption);
     }
 
     private void LoadCandidateLists(ClearMeCandidates candidates)
     {
+        _requiresFit = candidates.RequiresFit;
+        FitCombo.IsEnabled = _requiresFit;
+        DualFitCombo.IsEnabled = _requiresFit;
         LoadCandidates(MeRegionCombo, candidates.MeRegions);
         LoadCandidates(FitCombo, candidates.FitTools);
         LoadCandidates(DualMeRegionCombo, candidates.MeRegions);
@@ -259,9 +297,10 @@ public partial class ClearMeWindow : Window
             return;
         }
 
-        var meRegions = SelectedMeRegionPaths(MeRegionCombo);
-        var fitCandidates = SelectedFitPaths(FitCombo);
-        if (meRegions.Count == 0 || fitCandidates.Count == 0)
+        var autoRetryWithAll = AutoRetryWithAllCheckBox.IsChecked == true;
+        var meRegions = SelectedMeRegionPaths(MeRegionCombo, autoRetryWithAll);
+        var fitCandidates = SelectedFitPaths(FitCombo, autoRetryWithAll);
+        if (meRegions.Count == 0 || (_requiresFit && fitCandidates.Count == 0))
         {
             MessageBox.Show(this, "Select ME Region and FIT first.", "Clear ME", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -271,7 +310,7 @@ public partial class ClearMeWindow : Window
         _clearMeCts = new CancellationTokenSource();
         try
         {
-            await _clearSingleBios(memory, meRegions, fitCandidates, ManualFallbackCheckBox.IsChecked == true, AppendClearMeLog, _clearMeCts.Token);
+            await _clearSingleBios(memory, meRegions, fitCandidates, _requiresFit, ManualFallbackCheckBox.IsChecked == true, AppendClearMeLog, _clearMeCts.Token);
             Close();
         }
         catch (OperationCanceledException)
@@ -291,12 +330,17 @@ public partial class ClearMeWindow : Window
     private static string SelectedPath(System.Windows.Controls.ComboBox comboBox) =>
         comboBox.SelectedItem is FilePathOption option ? option.Path : comboBox.Text.Trim();
 
-    private static IReadOnlyList<string> SelectedMeRegionPaths(System.Windows.Controls.ComboBox comboBox)
+    private static IReadOnlyList<string> SelectedMeRegionPaths(System.Windows.Controls.ComboBox comboBox, bool autoRetryWithAll)
     {
         var selected = SelectedPath(comboBox);
         if (string.IsNullOrWhiteSpace(selected))
         {
             return [];
+        }
+
+        if (!autoRetryWithAll)
+        {
+            return [selected];
         }
 
         var fallbacks = comboBox.Items
@@ -307,12 +351,17 @@ public partial class ClearMeWindow : Window
         return [selected, .. fallbacks];
     }
 
-    private static IReadOnlyList<string> SelectedFitPaths(System.Windows.Controls.ComboBox comboBox)
+    private static IReadOnlyList<string> SelectedFitPaths(System.Windows.Controls.ComboBox comboBox, bool autoRetryWithAll)
     {
         var selected = SelectedPath(comboBox);
         if (string.IsNullOrWhiteSpace(selected))
         {
             return [];
+        }
+
+        if (!autoRetryWithAll)
+        {
+            return [selected];
         }
 
         var selectedVersion = MeaAnalyzer.VersionParts(selected);
@@ -353,9 +402,10 @@ public partial class ClearMeWindow : Window
             return;
         }
 
-        var meRegions = SelectedMeRegionPaths(DualMeRegionCombo);
-        var fitCandidates = SelectedFitPaths(DualFitCombo);
-        if (meRegions.Count == 0 || fitCandidates.Count == 0)
+        var autoRetryWithAll = DualAutoRetryWithAllCheckBox.IsChecked == true;
+        var meRegions = SelectedMeRegionPaths(DualMeRegionCombo, autoRetryWithAll);
+        var fitCandidates = SelectedFitPaths(DualFitCombo, autoRetryWithAll);
+        if (meRegions.Count == 0 || (_requiresFit && fitCandidates.Count == 0))
         {
             MessageBox.Show(this, "Select ME Region and FIT first.", "Clear ME", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -365,7 +415,7 @@ public partial class ClearMeWindow : Window
         _clearMeCts = new CancellationTokenSource();
         try
         {
-            await _clearDualBios(memory1, memory2, meRegions, fitCandidates, DualManualFallbackCheckBox.IsChecked == true, AppendClearMeLog, _clearMeCts.Token);
+            await _clearDualBios(memory1, memory2, meRegions, fitCandidates, _requiresFit, DualManualFallbackCheckBox.IsChecked == true, AppendClearMeLog, _clearMeCts.Token);
             Close();
         }
         catch (OperationCanceledException)

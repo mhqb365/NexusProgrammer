@@ -411,4 +411,5 @@ internal static partial class ClearMeCandidateFinder
 public sealed record ClearMeCandidates(
     IReadOnlyList<string> MeRegions,
     IReadOnlyList<string> FitTools,
-    string AnalysisSummary = "");
+    string AnalysisSummary = "",
+    bool RequiresFit = true);

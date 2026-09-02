@@ -379,8 +379,6 @@ public partial class MainWindow : Window
     private void WireHexEditorActions(HexEditorView editor)
     {
         editor.ClearBufferRequested += HexEditor_ClearBufferRequested;
-        editor.MergeBiosRequested += (_, _) => MergeBios_Click(editor, new RoutedEventArgs());
-        editor.SplitBiosRequested += (_, _) => SplitBios_Click(editor, new RoutedEventArgs());
     }
 
     private bool ActivateMemoryTab(TabItem tab)
@@ -960,19 +958,30 @@ public partial class MainWindow : Window
             return new ClearMeCandidates([], [], message);
         }
 
-        var analysis = await MeaAnalyzer.AnalyzeAsync(buffer);
+        var sourceFileName = memories.Count == 1
+            ? memories[0].SourceFileName
+            : string.Join("_", memories.Select(memory => Path.GetFileNameWithoutExtension(memory.SourceFileName))
+                .Where(name => !string.IsNullOrWhiteSpace(name)));
+        var analysis = await MeaAnalyzer.AnalyzeAsync(buffer, sourceFileName);
         if (!analysis.Success)
         {
             return new ClearMeCandidates([], [], $"Analyze failed{Environment.NewLine}{analysis.Summary}");
         }
 
         var candidates = ClearMeCandidateFinder.Find(_settings, analysis.Info);
+        var requiresFit = !IsLegacyMeFirmware(analysis.Info);
         return candidates with
         {
             AnalysisSummary = $"Analyze success{Environment.NewLine}{analysis.Summary}{Environment.NewLine}{Environment.NewLine}" +
-                              $"Candidates: {candidates.MeRegions.Count} ME Region, {candidates.FitTools.Count} FIT"
+                              $"Candidates: {candidates.MeRegions.Count} ME Region, {candidates.FitTools.Count} FIT",
+            RequiresFit = requiresFit
         };
     }
+
+    private static bool IsLegacyMeFirmware(MeaFirmwareInfo info) =>
+        info.Major is >= 1 and <= 10 &&
+        info.Family.Contains("ME", StringComparison.OrdinalIgnoreCase) &&
+        !info.Family.Contains("CSE", StringComparison.OrdinalIgnoreCase);
 
     private static byte[] MergeMemoryBuffers(IEnumerable<MemoryBufferOption> memories)
     {
@@ -993,13 +1002,13 @@ public partial class MainWindow : Window
             .OrderBy(tab => tab.Index)
             .Select(tab => new MemoryBufferOption(MemoryTabLabel(tab.Index), tab.Buffer.ToArray(), tab.SourceFileName));
 
-    private async Task ClearSingleBiosAsync(MemoryBufferOption memory, IReadOnlyList<string> meRegionPaths, IReadOnlyList<string> fitPaths, bool allowManualFallback, Action<string> log, CancellationToken cancellationToken)
+    private async Task ClearSingleBiosAsync(MemoryBufferOption memory, IReadOnlyList<string> meRegionPaths, IReadOnlyList<string> fitPaths, bool requiresFit, bool allowManualFallback, Action<string> log, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         await RunDialogOperationAsync("Clear ME", null, async _ =>
         {
             log($"Clear ME request: {memory.Label}");
-            var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPaths, fitPaths, log, cancellationToken, allowManualFallback);
+            var result = await ClearMeSingleBiosService.ClearAsync(memory.Buffer, meRegionPaths, fitPaths, log, cancellationToken, allowManualFallback, requiresFit);
             stopwatch.Stop();
             var tab = AddBiosTab();
             MemoryTabControl.SelectedItem = tab;
@@ -1025,7 +1034,7 @@ public partial class MainWindow : Window
         }, logCompletion: false, logger: log);
     }
 
-    private async Task ClearDualBiosAsync(MemoryBufferOption memory1, MemoryBufferOption memory2, IReadOnlyList<string> meRegionPaths, IReadOnlyList<string> fitPaths, bool allowManualFallback, Action<string> log, CancellationToken cancellationToken)
+    private async Task ClearDualBiosAsync(MemoryBufferOption memory1, MemoryBufferOption memory2, IReadOnlyList<string> meRegionPaths, IReadOnlyList<string> fitPaths, bool requiresFit, bool allowManualFallback, Action<string> log, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         await RunDialogOperationAsync("Clear ME", null, async _ =>
@@ -1034,7 +1043,7 @@ public partial class MainWindow : Window
             var merged = new byte[memory1.Buffer.Length + memory2.Buffer.Length];
             Buffer.BlockCopy(memory1.Buffer, 0, merged, 0, memory1.Buffer.Length);
             Buffer.BlockCopy(memory2.Buffer, 0, merged, memory1.Buffer.Length, memory2.Buffer.Length);
-            var result = await ClearMeSingleBiosService.ClearAsync(merged, meRegionPaths, fitPaths, log, cancellationToken, allowManualFallback);
+            var result = await ClearMeSingleBiosService.ClearAsync(merged, meRegionPaths, fitPaths, log, cancellationToken, allowManualFallback, requiresFit);
             stopwatch.Stop();
             if (result.Bios.Length <= memory1.Buffer.Length)
             {

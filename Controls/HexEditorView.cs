@@ -45,12 +45,8 @@ public sealed class HexEditorView : FrameworkElement
         ClipToBounds = true;
 
         var clearBufferItem = new MenuItem { Header = "Clear buffer" };
-        var mergeBiosItem = new MenuItem { Header = "Merge BIOS" };
-        var splitBiosItem = new MenuItem { Header = "Split BIOS" };
         clearBufferItem.Click += (_, _) => ClearBufferRequested?.Invoke(this, EventArgs.Empty);
-        mergeBiosItem.Click += (_, _) => MergeBiosRequested?.Invoke(this, EventArgs.Empty);
-        splitBiosItem.Click += (_, _) => SplitBiosRequested?.Invoke(this, EventArgs.Empty);
-        ContextMenu = new ContextMenu { Items = { clearBufferItem, new Separator(), mergeBiosItem, splitBiosItem } };
+        ContextMenu = new ContextMenu { Items = { clearBufferItem } };
     }
 
     public void SetBuffer(byte[] buffer, Action<int, byte> byteChanged)
@@ -78,10 +74,6 @@ public sealed class HexEditorView : FrameworkElement
     public event EventHandler? ScrollChanged;
 
     public event EventHandler? ClearBufferRequested;
-
-    public event EventHandler? MergeBiosRequested;
-
-    public event EventHandler? SplitBiosRequested;
 
     public void ScrollToOffset(int offset)
     {

@@ -11,19 +11,26 @@ Flashing BIOS application for CH341, CH347, XGecu T48, RT809F and RT809H
 ## Features
 
 - Supports CH341, CH347, XGecu T48, RT809F and RT809H programmers
-- Automatic IC detection and search, add new ICs not currently in the list
+- Automatic programmer detection, IC detection, IC catalog search and custom IC entries
 - Hex-format buffer preview and editing
-- Read, write, verify, erase, and execute workflow scripts
-- Support Clear ME Intel BIOS
+- Multiple Memory tabs for comparing, editing, merging, splitting and saving BIOS images
+- Read, write, verify, erase, blank check and operation cancellation
+- Script toolbar for Read + Verify and Erase + Write + Verify workflows
+- Windows OEM key search from BIOS buffers
+- BIOS tools: Merge BIOS and Split BIOS from toolbar menu or hex editor context menu
+- Intel Clear ME helper, ME Region/FIT suggestions, optional retry across candidates and manual ME replacement fallback
+- Theme support: Default, Heritage, Violet and Matcha
+
+ME Region and FIT are not distributed with this project. You must prepare them yourself, or download here 👉 [ME Region & FIT](https://drive.google.com/drive/folders/1ocp61oICeFGZuf-J59gpnLO88XGzKvPY?usp=sharing)
 
 ## Requirements
 
 - Windows 10/11
 - .NET 8
-- CH341/CH347 Driver 👉 [DriverCH341+CH347.zip](Drivers/DriverCH341+CH347.zip)
-- XGecu T48 Driver 👉 [DriverXGecuT48.zip](Drivers/DriverXGecuT48.zip)
-- RT809F Driver 👉 [DriverRT809F.zip](Drivers/DriverRT809F.zip)
-- RT809H Driver 👉 [DriverRT809H.zip](Drivers/DriverRT809H.zip)
+- CH341/CH347 Driver: [DriverCH341+CH347.zip](Drivers/DriverCH341+CH347.zip)
+- XGecu T48 Driver: [DriverXGecuT48.zip](Drivers/DriverXGecuT48.zip)
+- RT809F Driver: [DriverRT809F.zip](Drivers/DriverRT809F.zip)
+- RT809H Driver: [DriverRT809H.zip](Drivers/DriverRT809H.zip)
 
 ## SDKs
 
@@ -32,16 +39,16 @@ outside the WPF application:
 
 - [XGecu T48 SDK](https://github.com/mhqb365/T48.SDK): WinUSB-based SPI25 support for device
   discovery, JEDEC ID, read, blank check, erase, write, sparse write, transfer
-  logging and protocol experiments.
+  logging and protocol experiments
 - [RT809F SDK](https://github.com/mhqb365/RT809F.SDK): FTDI D2XX-based SPI-NOR support for
   discovery, JEDEC ID, read, blank check, erase, batched page program, verify,
-  progress, cancellation and deterministic cleanup.
+  progress, cancellation and deterministic cleanup
 - [RT809H SDK](https://github.com/mhqb365/RT809H.SDK): FTDI D2XX-based SPI-NOR support using
-  RT809H-specific initialization captured from vendor workflows.
+  RT809H-specific initialization captured from vendor workflows
 
 These SDKs are unofficial community projects and are not endorsed by the device
 vendors. Treat erase and write operations as destructive and test new
-integrations with sacrificial flash chips.
+integrations with sacrificial flash chips
 
 ## Download
 
@@ -72,19 +79,26 @@ See `THIRD_PARTY_NOTICES.md` and `flashrom-data/COPYING.rst` for more informatio
 ## Tính năng
 
 - Hỗ trợ máy nạp CH341, CH347, XGecu T48, RT809F và RT809H
-- Tự động nhận dạng, tìm kiếm IC, thêm IC mới nếu chưa có trong danh sách
-- Xem trước/chỉnh sửa buffer dạng hex
-- Đọc, ghi, xác minh, xóa và chạy workflow script
-- Hỗ trợ Clear ME BIOS Intel
+- Tự động nhận dạng máy nạp, nhận dạng IC, tìm kiếm catalog IC và thêm IC tùy chỉnh
+- Xem trước và chỉnh sửa buffer dạng hex
+- Nhiều tab Memory để so sánh, chỉnh sửa, merge, split và lưu nhiều BIOS
+- Đọc, ghi, verify, xóa, blank check và hủy thao tác
+- Nút Scripts trên toolbar cho workflow Read + Verify và Erase + Write + Verify
+- Tìm Windows OEM key trong buffer BIOS
+- Công cụ BIOS: Merge BIOS và Split BIOS từ menu toolbar hoặc context menu của hex editor
+- Hỗ trợ Clear ME Intel BIOS, tự đề xuất ME Region/FIT, tùy chọn retry toàn bộ candidate và fallback thay ME thủ công
+- Hỗ trợ giao diện Default, Heritage, Violet và Matcha
+
+ME Region và FIT không được phân phối kèm theo dự án này. Bạn phải chuẩn bị chúng hoặc tải về từ đây 👉 [ME Region & FIT](https://drive.google.com/drive/folders/1ocp61oICeFGZuf-J59gpnLO88XGzKvPY?usp=sharing)
 
 ## Yêu cầu
 
 - Windows 10/11
 - .NET 8
-- Driver CH341/CH347 👉 [DriverCH341+CH347.zip](Drivers/DriverCH341+CH347.zip)
-- Driver XGecu T48 👉 [DriverXGecuT48.zip](Drivers/DriverXGecuT48.zip)
-- Driver RT809F 👉 [DriverRT809F.zip](Drivers/DriverRT809F.zip)
-- Driver RT809H 👉 [DriverRT809H.zip](Drivers/DriverRT809H.zip)
+- Driver CH341/CH347: [DriverCH341+CH347.zip](Drivers/DriverCH341+CH347.zip)
+- Driver XGecu T48: [DriverXGecuT48.zip](Drivers/DriverXGecuT48.zip)
+- Driver RT809F: [DriverRT809F.zip](Drivers/DriverRT809F.zip)
+- Driver RT809H: [DriverRT809H.zip](Drivers/DriverRT809H.zip)
 
 ## SDK
 
@@ -93,16 +107,16 @@ với ứng dụng WPF:
 
 - [XGecu T48 SDK](https://github.com/mhqb365/T48.SDK): hỗ trợ SPI25 qua WinUSB, gồm nhận dạng
   thiết bị, JEDEC ID, đọc, blank check, xóa, ghi, sparse write, log transfer và
-  thử nghiệm protocol.
+  thử nghiệm protocol
 - [RT809F SDK](https://github.com/mhqb365/RT809F.SDK): hỗ trợ SPI-NOR qua FTDI D2XX, gồm nhận
   dạng thiết bị, JEDEC ID, đọc, blank check, xóa, ghi theo batch, verify, tiến
-  trình, hủy thao tác và cleanup ổn định.
+  trình, hủy thao tác và cleanup ổn định
 - [RT809H SDK](https://github.com/mhqb365/RT809H.SDK): hỗ trợ SPI-NOR qua FTDI D2XX với chuỗi
-  khởi tạo riêng của RT809H được phân tích từ workflow của phần mềm hãng.
+  khởi tạo riêng của RT809H được phân tích từ workflow của phần mềm hãng
 
 Các SDK này là dự án cộng đồng không chính thức và không được nhà sản xuất thiết
 bị xác nhận hay bảo trợ. Thao tác xóa và ghi có thể phá hủy dữ liệu trên chip,
-hãy thử nghiệm tích hợp mới bằng chip thử trước.
+hãy thử nghiệm tích hợp mới bằng chip thử trước
 
 ## Tải về
 
@@ -122,4 +136,4 @@ MIT License
 
 Một số phần trong danh sách IC SPI NOR của CH341/CH347 được tạo từ định nghĩa chip của flashrom và vẫn tuân theo giấy phép flashrom GPL-2.0-or-later
 
-See `THIRD_PARTY_NOTICES.md` và `flashrom-data/COPYING.rst` để biết thêm thông tin
+Xem `THIRD_PARTY_NOTICES.md` và `flashrom-data/COPYING.rst` để biết thêm thông tin
