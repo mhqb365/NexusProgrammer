@@ -612,6 +612,10 @@
                                 <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
                                 <MenuItem Header="Merge BIOS" Click="MergeBios_Click" />
                                 <MenuItem Header="Split BIOS" Click="SplitBios_Click" />
+                                <MenuItem Header="Unlock Acer" Click="UnlockAcer_Click" />
+                                <MenuItem Header="Unlock Asus" Click="UnlockAsus_Click" />
+                                <MenuItem Header="Unlock DELL 8FC8" Click="Unlock8Fc8_Click" />
+                                <MenuItem Header="Unlock HP" Click="UnlockHp_Click" />
                                 <!-- <Separator />
                                 <MenuItem Header="Acer">
                                     <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />

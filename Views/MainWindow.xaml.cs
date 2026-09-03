@@ -1181,6 +1181,63 @@ public partial class MainWindow : Window
         SaveCurrentBufferWithDialog(fileName2);
     }
 
+    private void Unlock8Fc8_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeMemoryTab is null || _buffer.Length == 0)
+        {
+            MessageBox.Show(this, "Select a Memory tab first.", "Unlock DELL 8FC8", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var sourceLabel = MemoryTabLabel(_activeMemoryTab.Index);
+        var result = Unlock8Fc8Service.Unlock(_buffer);
+        if (!result.Success)
+        {
+            AppendLog($"Unlock DELL 8FC8 failed: {result.Message}");
+            MessageBox.Show(this, result.Message, "Unlock DELL 8FC8", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var fileName = UniqueMemoryTabFileName(Unlock8Fc8FileNameFor(_activeMemoryTab.SourceFileName));
+        var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
+        MemoryTabControl.SelectedItem = tab;
+        AppendLog($"Unlock DELL 8FC8 completed: {sourceLabel} -> {MemoryTabLabel(_memoryTabs[tab].Index)} ({result.PatchCount} patch(es), {FormatBytes(result.Bios.Length)})");
+        SaveCurrentBufferWithDialog(fileName);
+    }
+
+    private void UnlockAcer_Click(object sender, RoutedEventArgs e) =>
+        UnlockOemPassword(OemPasswordUnlockKind.Acer, "Unlock Acer");
+
+    private void UnlockAsus_Click(object sender, RoutedEventArgs e) =>
+        UnlockOemPassword(OemPasswordUnlockKind.Asus, "Unlock Asus");
+
+    private void UnlockHp_Click(object sender, RoutedEventArgs e) =>
+        UnlockOemPassword(OemPasswordUnlockKind.Hp, "Unlock HP");
+
+    private void UnlockOemPassword(OemPasswordUnlockKind kind, string title)
+    {
+        if (_activeMemoryTab is null || _buffer.Length == 0)
+        {
+            MessageBox.Show(this, "Select a Memory tab first.", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var sourceLabel = MemoryTabLabel(_activeMemoryTab.Index);
+        var result = OemPasswordUnlockService.Unlock(_buffer, kind);
+        if (!result.Success)
+        {
+            AppendLog($"{title} failed: {result.Message}");
+            MessageBox.Show(this, result.Message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var fileName = UniqueMemoryTabFileName(OemUnlockFileNameFor(_activeMemoryTab.SourceFileName, kind));
+        var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
+        MemoryTabControl.SelectedItem = tab;
+        AppendLog($"{title} completed: {sourceLabel} -> {MemoryTabLabel(_memoryTabs[tab].Index)} ({result.ClearedRanges.Count} region(s), {FormatBytes(result.Bios.Length)})");
+        SaveCurrentBufferWithDialog(fileName);
+    }
+
     private void WindowsKeyMenuButton_Click(object sender, RoutedEventArgs e)
     {
         WindowsKeyMenuButton.ContextMenu.PlacementTarget = WindowsKeyMenuButton;
@@ -2207,6 +2264,22 @@ public partial class MainWindow : Window
 
     private static string SplitedBiosFileNameFor(int bytes) =>
         $"{FormatBinaryMegabytes(bytes)}_SPLITED.bin";
+
+    private static string Unlock8Fc8FileNameFor(string sourceFileName)
+    {
+        var source = string.IsNullOrWhiteSpace(sourceFileName)
+            ? "BIOS"
+            : Path.GetFileNameWithoutExtension(sourceFileName);
+        return $"{SafeFileStem(source)}_8FC8_UNLOCKED.bin";
+    }
+
+    private static string OemUnlockFileNameFor(string sourceFileName, OemPasswordUnlockKind kind)
+    {
+        var source = string.IsNullOrWhiteSpace(sourceFileName)
+            ? "BIOS"
+            : Path.GetFileNameWithoutExtension(sourceFileName);
+        return $"{SafeFileStem(source)}_{kind.ToString().ToUpperInvariant()}_UNLOCK.bin";
+    }
 
     private static string FormatBinaryMegabytes(int bytes)
     {
