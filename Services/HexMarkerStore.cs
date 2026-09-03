@@ -9,26 +9,46 @@ internal static class HexMarkerStore
 
     private static string MarkerPath => Path.Combine(AppContext.BaseDirectory, "HexMarker.json");
 
+    private static List<HexMarker> DefaultMarkers() =>
+    [
+        new()
+        {
+            Name = "Find Win Key",
+            Hex = "01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 1D 00 00 00"
+        }
+    ];
+
     public static List<HexMarker> Load()
     {
         try
         {
             if (File.Exists(MarkerPath))
             {
-                return Normalize(JsonSerializer.Deserialize<List<HexMarker>>(File.ReadAllText(MarkerPath)) ?? []);
+                var markers = Normalize(JsonSerializer.Deserialize<List<HexMarker>>(File.ReadAllText(MarkerPath)) ?? []);
+                if (markers.Count > 0)
+                {
+                    return markers;
+                }
+
+                var defaults = DefaultMarkers();
+                Save(defaults);
+                return defaults;
             }
 
             var migrated = LoadLegacyMarkers();
             if (migrated.Count > 0)
             {
                 Save(migrated);
+                return migrated;
             }
 
-            return migrated;
+            var initialMarkers = DefaultMarkers();
+            Save(initialMarkers);
+            return initialMarkers;
         }
         catch
         {
-            return [];
+            return DefaultMarkers();
         }
     }
 
