@@ -1206,10 +1206,10 @@ public partial class MainWindow : Window
     }
 
     private void UnlockAcer_Click(object sender, RoutedEventArgs e) =>
-        UnlockOemPassword(OemPasswordUnlockKind.Acer, "Unlock Acer");
+        UnlockOemPassword(OemPasswordUnlockKind.Acer, "Unlock ACER");
 
     private void UnlockAsus_Click(object sender, RoutedEventArgs e) =>
-        UnlockOemPassword(OemPasswordUnlockKind.Asus, "Unlock Asus");
+        UnlockOemPassword(OemPasswordUnlockKind.Asus, "Unlock ASUS");
 
     private void UnlockHp_Click(object sender, RoutedEventArgs e) =>
         UnlockOemPassword(OemPasswordUnlockKind.Hp, "Unlock HP");
