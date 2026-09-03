@@ -19,7 +19,7 @@ Flashing BIOS application for CH341, CH347, XGecu T48, RT809F and RT809H
 - Windows OEM key search from BIOS buffers
 - BIOS tools: Merge BIOS and Split BIOS from toolbar menu or hex editor context menu
 - Intel Clear ME helper, ME Region/FIT suggestions, optional retry across candidates and manual ME replacement fallback
-- Theme support: Default, Heritage, Violet and Matcha
+- Theme support: Default, Arcade, Heritage, Violet and Matcha
 
 ME Region and FIT are not distributed with this project. You must prepare them yourself, or download here 👉 [ME Region & FIT](https://drive.google.com/drive/folders/1ocp61oICeFGZuf-J59gpnLO88XGzKvPY?usp=sharing)
 
@@ -87,7 +87,7 @@ See `THIRD_PARTY_NOTICES.md` and `flashrom-data/COPYING.rst` for more informatio
 - Tìm Windows OEM key trong buffer BIOS
 - Công cụ BIOS: Merge BIOS và Split BIOS từ menu toolbar hoặc context menu của hex editor
 - Hỗ trợ Clear ME Intel BIOS, tự đề xuất ME Region/FIT, tùy chọn retry toàn bộ candidate và fallback thay ME thủ công
-- Hỗ trợ giao diện Default, Heritage, Violet và Matcha
+- Hỗ trợ giao diện Default, Arcade, Heritage, Violet và Matcha
 
 ME Region và FIT không được phân phối kèm theo dự án này. Bạn phải chuẩn bị chúng hoặc tải về từ đây 👉 [ME Region & FIT](https://drive.google.com/drive/folders/1ocp61oICeFGZuf-J59gpnLO88XGzKvPY?usp=sharing)
 

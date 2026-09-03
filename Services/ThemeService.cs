@@ -6,6 +6,7 @@ namespace NexusProgrammer;
 internal static class ThemeService
 {
     public const string DefaultThemeName = "Default";
+    public const string ArcadeThemeName = "Arcade";
     public const string HeritageThemeName = "Heritage";
     public const string MatchaThemeName = "Matcha";
     public const string VioletThemeName = "Violet";
@@ -13,6 +14,7 @@ internal static class ThemeService
     public static readonly string[] ThemeNames =
     [
         DefaultThemeName,
+        ArcadeThemeName,
         HeritageThemeName,
         MatchaThemeName,
         VioletThemeName
@@ -178,6 +180,46 @@ internal static class ThemeService
         ["ProgressTrackBrush"] = "#DCE6D2"
     };
 
+    private static readonly IReadOnlyDictionary<string, string> ArcadeColors = new Dictionary<string, string>
+    {
+        ["AppBackgroundBrush"] = "#FFF0F6",
+        ["PanelBackgroundBrush"] = "#F7E4F1",
+        ["ToolbarBackgroundBrush"] = "#F1D8EA",
+        ["ToolbarButtonBackgroundBrush"] = "#FF3DA5",
+        ["ToolbarButtonHoverBackgroundBrush"] = "#E62F92",
+        ["ToolbarButtonPressedBackgroundBrush"] = "#C9247E",
+        ["ToolbarButtonBorderBrush"] = "#FF3DA5",
+        ["ToolbarButtonForegroundBrush"] = "#FFFFFF",
+        ["HexHeaderButtonBackgroundBrush"] = "#FF3DA5",
+        ["HexHeaderButtonForegroundBrush"] = "#FFFFFF",
+        ["HexHeaderButtonBorderBrush"] = "#FF3DA5",
+        ["StandardButtonBackgroundBrush"] = "#FF3DA5",
+        ["StandardButtonHoverBackgroundBrush"] = "#E62F92",
+        ["StandardButtonPressedBackgroundBrush"] = "#C9247E",
+        ["StandardButtonForegroundBrush"] = "#FFFFFF",
+        ["StandardButtonBorderBrush"] = "#FF3DA5",
+        ["SurfaceBackgroundBrush"] = "#FFFFFF",
+        ["SubtleBackgroundBrush"] = "#FFF6FA",
+        ["InputBackgroundBrush"] = "#FFFFFF",
+        ["ReadOnlyBackgroundBrush"] = "#FFF8FB",
+        ["HoverBackgroundBrush"] = "#FFD8EC",
+        ["PressedBackgroundBrush"] = "#FFC1E0",
+        ["AccentBrush"] = "#FF3DA5",
+        ["AccentSoftBrush"] = "#FFD8EC",
+        ["AlternateRowBackgroundBrush"] = "#FFFAFD",
+        ["TextBrush"] = "#1A0B3C",
+        ["MutedTextBrush"] = "#8A7CA8",
+        ["BorderBrush"] = "#D4B9D7",
+        ["GridLineBrush"] = "#EEDCEC",
+        ["LightGridLineBrush"] = "#F7EAF5",
+        ["AddressBackgroundBrush"] = "#1A0B3C",
+        ["AddressForegroundBrush"] = "#FFFFFF",
+        ["SplitterBrush"] = "#E4CDE3",
+        ["SelectionBackgroundBrush"] = "#FFD8EC",
+        ["SelectionForegroundBrush"] = "#1A0B3C",
+        ["ProgressTrackBrush"] = "#F1D8EA"
+    };
+
     public static void Apply(string? themeName)
     {
         var colors = themeName switch
@@ -186,6 +228,7 @@ internal static class ThemeService
             var name when string.Equals(name, "Crypto Violet", StringComparison.OrdinalIgnoreCase) => VioletColors,
             var name when string.Equals(name, VioletThemeName, StringComparison.OrdinalIgnoreCase) => VioletColors,
             var name when string.Equals(name, MatchaThemeName, StringComparison.OrdinalIgnoreCase) => MatchaColors,
+            var name when string.Equals(name, ArcadeThemeName, StringComparison.OrdinalIgnoreCase) => ArcadeColors,
             _ => DefaultColors
         };
 
