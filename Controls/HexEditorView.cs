@@ -38,15 +38,19 @@ public sealed class HexEditorView : FrameworkElement
     private readonly Stack<EditBatch> _undo = [];
     private readonly Stack<EditBatch> _redo = [];
     private readonly HashSet<int> _editedOffsets = [];
+    private readonly MenuItem _fillSelectionItem;
 
     public HexEditorView()
     {
         Focusable = true;
         ClipToBounds = true;
 
+        _fillSelectionItem = new MenuItem { Header = "Fill selection" };
+        _fillSelectionItem.Click += (_, _) => FillSelectionRequested?.Invoke(this, EventArgs.Empty);
         var clearBufferItem = new MenuItem { Header = "Clear buffer" };
         clearBufferItem.Click += (_, _) => ClearBufferRequested?.Invoke(this, EventArgs.Empty);
-        ContextMenu = new ContextMenu { Items = { clearBufferItem } };
+        ContextMenu = new ContextMenu { Items = { clearBufferItem, new Separator(), _fillSelectionItem } };
+        ContextMenu.Opened += (_, _) => _fillSelectionItem.IsEnabled = SelectionLength > 0;
     }
 
     public void SetBuffer(byte[] buffer, Action<int, byte> byteChanged)
@@ -65,6 +69,12 @@ public sealed class HexEditorView : FrameworkElement
 
     public int SelectedOffset => _selectedOffset;
 
+    public int SelectionStart => Math.Min(_selectionAnchor, _selectionEnd);
+
+    public int SelectionLength => _buffer.Length == 0
+        ? 0
+        : Math.Max(0, Math.Min(Math.Max(_selectionAnchor, _selectionEnd), _buffer.Length - 1) - SelectionStart + 1);
+
     public int FirstLine => _firstLine;
 
     public int TotalLines => Math.Max(1, (_buffer.Length + BytesPerLine - 1) / BytesPerLine);
@@ -74,6 +84,8 @@ public sealed class HexEditorView : FrameworkElement
     public event EventHandler? ScrollChanged;
 
     public event EventHandler? ClearBufferRequested;
+
+    public event EventHandler? FillSelectionRequested;
 
     public void ScrollToOffset(int offset)
     {
@@ -139,6 +151,34 @@ public sealed class HexEditorView : FrameworkElement
         _redo.Clear();
         _pendingNibble = -1;
         SelectRange(offset, count);
+        return true;
+    }
+
+    public bool FillSelection(byte[] pattern)
+    {
+        if (pattern.Length == 0 || SelectionLength == 0)
+        {
+            return false;
+        }
+
+        var start = SelectionStart;
+        var count = SelectionLength;
+        var edits = new List<ByteEdit>(count);
+        for (var i = 0; i < count; i++)
+        {
+            AddByteEdit(start + i, pattern[i % pattern.Length], edits);
+        }
+
+        if (edits.Count == 0)
+        {
+            SelectRange(start, count);
+            return false;
+        }
+
+        _undo.Push(new EditBatch(edits.ToArray()));
+        _redo.Clear();
+        _pendingNibble = -1;
+        SelectRange(start, count);
         return true;
     }
 
@@ -225,6 +265,11 @@ public sealed class HexEditorView : FrameworkElement
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         Focus();
+        if (e.ChangedButton != MouseButton.Left)
+        {
+            return;
+        }
+
         var p = e.GetPosition(this);
         if (!TryHitTestOffset(p, out var offset, out var ascii))
         {

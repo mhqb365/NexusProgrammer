@@ -78,6 +78,7 @@ public partial class MainWindow : Window
     private readonly List<ChipProfile> _chips = [];
     private readonly Dictionary<TabItem, MemoryTabState> _memoryTabs = [];
     private List<HexMarker> _hexMarkers = HexMarkerStore.Load();
+    private List<HexFillPreset> _hexFillPresets = HexFillPresetStore.Load();
 
     private readonly List<ProgrammerOption> _programmerOptions =
     [
@@ -381,6 +382,7 @@ public partial class MainWindow : Window
     private void WireHexEditorActions(HexEditorView editor)
     {
         editor.ClearBufferRequested += HexEditor_ClearBufferRequested;
+        editor.FillSelectionRequested += HexEditor_FillSelectionRequested;
     }
 
     private bool ActivateMemoryTab(TabItem tab)
@@ -2438,6 +2440,44 @@ public partial class MainWindow : Window
         RebuildRows();
         UpdateStatus();
         AppendLog($"{MemoryTabLabel(state.Index)} buffer cleared to FF");
+    }
+
+    private void HexEditor_FillSelectionRequested(object? sender, EventArgs e)
+    {
+        if (sender is not HexEditorView editor)
+        {
+            return;
+        }
+
+        var state = _memoryTabs.Values.FirstOrDefault(item => ReferenceEquals(item.Editor, editor));
+        if (state is null || editor.SelectionLength == 0)
+        {
+            return;
+        }
+
+        MemoryTabControl.SelectedItem = state.Tab;
+        var start = editor.SelectionStart;
+        var length = editor.SelectionLength;
+        var dialog = new FillSelectionWindow(_hexFillPresets)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true || dialog.FillPattern.Length == 0)
+        {
+            _hexFillPresets = dialog.Presets.ToList();
+            HexFillPresetStore.Save(_hexFillPresets);
+            return;
+        }
+
+        _hexFillPresets = dialog.Presets.ToList();
+        HexFillPresetStore.Save(_hexFillPresets);
+        var changed = editor.FillSelection(dialog.FillPattern);
+        state.MeaAnalysis = null;
+        UpdateStatus();
+
+        var action = changed ? "filled" : "already matches";
+        AppendLog($"{MemoryTabLabel(state.Index)} selection {action}: 0x{start:X6}-0x{start + length - 1:X6} with {FormatHexPattern(dialog.FillPattern)}");
     }
 
     private void Fill00_Click(object sender, RoutedEventArgs e)
