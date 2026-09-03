@@ -25,6 +25,8 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
     private const int ProgramBatchSize = 63_720;
     private const ulong AddressSpaceSize = 0x1_0000_0000UL;
     private const string ExpectedSerial = "gggggggg";
+    private static readonly byte[] Rt809hPing = [0xAA, 0xEA, 0xCD, 0xCD, 0x6C, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD];
+    private static readonly byte[] Rt809hPingReplyPrefix = [0x55, 0xEA, 0xCD, 0xCD, 0x6C];
     private const byte PinsIdle = 0x08, PinsActive = 0x00, PinDirections = 0x0B;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private FtdiHandle? _handle;
@@ -48,10 +50,13 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
                 var serial = new byte[32];
                 var description = new byte[128];
                 if (Native.FT_GetDeviceInfoDetail(i, out _, out _, out var id, out _, serial, description, out _) == 0 &&
-                    id == FtdiId &&
-                    IsExpectedProgrammerSerial(Ascii(serial)))
+                    id == FtdiId)
                 {
-                    return true;
+                    var deviceSerial = Ascii(serial);
+                    if (IsExpectedProgrammerSerial(deviceSerial) && !LooksLikeRt809h(deviceSerial))
+                    {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -70,6 +75,7 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
             if (Native.FT_GetDeviceInfoDetail(i, out _, out _, out var id, out _, serial, description, out _) != 0 || id != FtdiId) continue;
             var deviceSerial = Ascii(serial); var deviceDescription = Ascii(description);
             if (!IsExpectedProgrammerSerial(deviceSerial)) continue;
+            if (LooksLikeRt809h(deviceSerial)) continue;
             if (deviceDescription.EndsWith(" B", StringComparison.OrdinalIgnoreCase)) controlSerial = deviceSerial;
             selected ??= deviceSerial;
             if (deviceDescription.EndsWith(" A", StringComparison.OrdinalIgnoreCase)) selected = deviceSerial;
@@ -511,6 +517,94 @@ public sealed class RT809FProgrammer : IDisposable, IAsyncDisposable
 
     private static string Ascii(byte[] value) { var end = Array.IndexOf(value,(byte)0); return System.Text.Encoding.ASCII.GetString(value,0,end < 0 ? value.Length : end); }
     private static bool IsExpectedProgrammerSerial(string serial) => serial.StartsWith(ExpectedSerial, StringComparison.OrdinalIgnoreCase);
+    private static bool LooksLikeRt809h(string serial)
+    {
+        if (TryRt809hHandshake(serial))
+        {
+            return true;
+        }
+
+        var pairedSerial = PairedInterfaceSerial(serial);
+        return pairedSerial is not null && TryRt809hHandshake(pairedSerial);
+    }
+
+    private static string? PairedInterfaceSerial(string serial)
+    {
+        if (serial.EndsWith("B", StringComparison.OrdinalIgnoreCase))
+        {
+            return serial[..^1] + "A";
+        }
+
+        return null;
+    }
+
+    private static unsafe bool TryRt809hHandshake(string serial)
+    {
+        try
+        {
+            CheckNative(Native.FT_OpenEx(System.Text.Encoding.ASCII.GetBytes(serial + '\0'), 1, out var raw), "FT_OpenEx(RT809H probe)");
+            using var h = new FtdiHandle(raw);
+            CheckNative(Native.FT_SetTimeouts(h, 200, 200), "FT_SetTimeouts(RT809H probe)");
+            CheckNative(Native.FT_Purge(h, 3), "FT_Purge(RT809H probe)");
+            CheckNative(Native.FT_SetBitMode(h, 0x00, 0x00), "FT_SetBitMode(reset RT809H probe)");
+            Thread.Sleep(2);
+            CheckNative(Native.FT_SetBitMode(h, 0x00, 0x02), "FT_SetBitMode(MPSSE RT809H probe)");
+            Thread.Sleep(2);
+            WriteRaw(h, [0x82, 0x00, 0x40]);
+            WriteRaw(h, [0x82, 0xFF, 0x00]);
+            CheckNative(Native.FT_SetBitMode(h, 0x00, 0x00), "FT_SetBitMode(serial RT809H probe)");
+            Thread.Sleep(2);
+
+            fixed (byte* p = Rt809hPing)
+            {
+                CheckNative(Native.FT_Write(h, (IntPtr)p, (uint)Rt809hPing.Length, out var written), "FT_Write(RT809H probe)");
+                if (written != Rt809hPing.Length) return false;
+            }
+
+            Span<byte> reply = stackalloc byte[5];
+            return TryReadReply(h, reply, TimeSpan.FromMilliseconds(250)) &&
+                reply.SequenceEqual(Rt809hPingReplyPrefix);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static unsafe void WriteRaw(FtdiHandle h, ReadOnlySpan<byte> data)
+    {
+        fixed (byte* p = data)
+        {
+            CheckNative(Native.FT_Write(h, (IntPtr)p, (uint)data.Length, out var written), "FT_Write(RT809H probe raw)");
+            if (written != data.Length) throw new RT809FException("Short write on RT809H probe raw channel.", 4);
+        }
+    }
+
+    private static unsafe bool TryReadReply(FtdiHandle h, Span<byte> output, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        fixed (byte* p = output)
+        {
+            var offset = 0;
+            while (offset < output.Length)
+            {
+                CheckNative(Native.FT_GetQueueStatus(h, out var queued), "FT_GetQueueStatus(RT809H probe)");
+                if (queued == 0)
+                {
+                    if (DateTime.UtcNow >= deadline) return false;
+                    Thread.Sleep(1);
+                    continue;
+                }
+
+                var wanted = Math.Min(queued, (uint)(output.Length - offset));
+                CheckNative(Native.FT_Read(h, (IntPtr)(p + offset), wanted, out var read), "FT_Read(RT809H probe)");
+                if (read == 0) return false;
+                offset += checked((int)read);
+            }
+        }
+
+        return true;
+    }
     private static void CheckNative(uint status, string operation) { if (status != 0) throw new RT809FException($"{operation} failed with D2XX status {status}.",checked((int)status)); }
 
     public void Dispose()
