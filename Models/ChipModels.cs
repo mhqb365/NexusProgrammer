@@ -37,6 +37,14 @@ public sealed record SearchHit(int Offset, int Length, string OffsetText, string
 
 public sealed record WindowsKeyCandidate(string Method, int Offset, string Key, int Length, string Description);
 
+public sealed class HexMarker
+{
+    public string Name { get; set; } = string.Empty;
+    public string Hex { get; set; } = string.Empty;
+
+    public override string ToString() => string.IsNullOrWhiteSpace(Name) ? Hex : Name;
+}
+
 public sealed class ProgrammerOption : System.ComponentModel.INotifyPropertyChanged
 {
     private bool _isConnected;

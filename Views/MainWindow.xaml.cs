@@ -77,6 +77,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<SearchHit> _searchHits = [];
     private readonly List<ChipProfile> _chips = [];
     private readonly Dictionary<TabItem, MemoryTabState> _memoryTabs = [];
+    private List<HexMarker> _hexMarkers = HexMarkerStore.Load();
 
     private readonly List<ProgrammerOption> _programmerOptions =
     [
@@ -120,6 +121,7 @@ public partial class MainWindow : Window
         _activeMemoryTab = new MemoryTabState(1, Bios1Tab, HexEditor, HexScrollBar, _buffer);
         _memoryTabs[Bios1Tab] = _activeMemoryTab;
         SearchHitsGrid.ItemsSource = _searchHits;
+        RefreshHexMarkerMenu();
         WireHexEditorActions(HexEditor);
         HexEditor.SetBuffer(_buffer, OnHexCellChanged);
         UpdateHexScrollBar();
@@ -1244,6 +1246,60 @@ public partial class MainWindow : Window
         WindowsKeyMenuButton.ContextMenu.IsOpen = true;
     }
 
+    private void HexMarkerManage_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new HexMarkerWindow(_hexMarkers)
+        {
+            Owner = this
+        };
+
+        dialog.ShowDialog();
+        _hexMarkers = dialog.Markers.ToList();
+        HexMarkerStore.Save(_hexMarkers);
+        RefreshHexMarkerMenu();
+    }
+
+    private async void HexMarker_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: HexMarker marker })
+        {
+            return;
+        }
+
+        HexSearchModeCombo.SelectedItem = "Hex";
+        HexSearchBox.Text = marker.Hex;
+        await RunSearchAsync(forward: true);
+    }
+
+    private void RefreshHexMarkerMenu()
+    {
+        while (HexMarkerMenuItem.Items.Count > 2)
+        {
+            HexMarkerMenuItem.Items.RemoveAt(2);
+        }
+
+        var markers = _hexMarkers
+            .Where(marker => !string.IsNullOrWhiteSpace(marker.Name) && !string.IsNullOrWhiteSpace(marker.Hex))
+            .ToList();
+        if (markers.Count == 0)
+        {
+            HexMarkerMenuItem.Items.Add(new MenuItem { Header = "(empty)", IsEnabled = false });
+            return;
+        }
+
+        foreach (var marker in markers)
+        {
+            var item = new MenuItem
+            {
+                Header = marker.Name,
+                ToolTip = marker.Hex,
+                Tag = marker
+            };
+            item.Click += HexMarker_Click;
+            HexMarkerMenuItem.Items.Add(item);
+        }
+    }
+
     private async void HexReplace_Click(object sender, RoutedEventArgs e) => await RunReplaceDialogAsync();
 
     private void HexSearchClear_Click(object sender, RoutedEventArgs e)
@@ -2031,7 +2087,7 @@ public partial class MainWindow : Window
         ? (byte)(value - 32)
         : value;
 
-    private static bool TryParseHexPattern(string text, out byte[] pattern)
+    internal static bool TryParseHexPattern(string text, out byte[] pattern)
     {
         var builder = new StringBuilder(text.Length);
         for (var i = 0; i < text.Length; i++)
@@ -2078,7 +2134,7 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private static string FormatHexPattern(byte[] pattern) =>
+    internal static string FormatHexPattern(byte[] pattern) =>
         string.Join(" ", pattern.Select(b => b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture)));
 
     private static bool TryParseOffset(string text, out int offset)

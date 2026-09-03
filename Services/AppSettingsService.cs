@@ -17,7 +17,7 @@ internal static class AppSettingsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    private static string SettingsPath =>
+    internal static string SettingsPath =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "NexusProgrammer",

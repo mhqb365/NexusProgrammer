@@ -1,0 +1,45 @@
+<Window x:Class="NexusProgrammer.HexMarkerWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Hex Marker" Width="560" Height="360" MinWidth="460" MinHeight="300"
+    WindowStartupLocation="CenterOwner"
+    ResizeMode="CanResize"
+    Background="{DynamicResource AppBackgroundBrush}"
+    Foreground="{DynamicResource TextBrush}">
+    <Window.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}" />
+    </Window.Resources>
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="34" />
+            <RowDefinition Height="34" />
+            <RowDefinition Height="38" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="72" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="92" />
+        </Grid.ColumnDefinitions>
+
+        <ListBox x:Name="MarkerList" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+            Margin="0,0,0,8" DisplayMemberPath="Name"
+            SelectionChanged="MarkerList_SelectionChanged" />
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Name" VerticalAlignment="Center" />
+        <TextBox x:Name="NameBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+            Height="24" Margin="0,0,0,6" />
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="Hex" VerticalAlignment="Center" />
+        <TextBox x:Name="HexBox" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+            Height="24" Margin="0,0,0,6" TextChanged="HexBox_TextChanged" />
+
+        <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3"
+            Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Width="76" Height="26" Margin="0,0,8,0" Click="Add_Click">Add</Button>
+            <Button Width="76" Height="26" Margin="0,0,8,0" Click="Update_Click">Update</Button>
+            <Button Width="76" Height="26" Margin="0,0,8,0" Click="Delete_Click">Delete</Button>
+            <Button Width="76" Height="26" IsCancel="True">Close</Button>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -612,26 +612,16 @@
                                 <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
                                 <MenuItem Header="Merge BIOS" Click="MergeBios_Click" />
                                 <MenuItem Header="Split BIOS" Click="SplitBios_Click" />
+                                <Separator />
                                 <MenuItem Header="Unlock ACER" Click="UnlockAcer_Click" />
                                 <MenuItem Header="Unlock ASUS" Click="UnlockAsus_Click" />
                                 <MenuItem Header="Unlock DELL 8FC8" Click="Unlock8Fc8_Click" />
                                 <MenuItem Header="Unlock HP" Click="UnlockHp_Click" />
-                                <!-- <Separator />
-                                <MenuItem Header="Acer">
-                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
+                                <Separator />
+                                <MenuItem x:Name="HexMarkerMenuItem" Header="Hex Marker">
+                                    <MenuItem Header="Manage..." Click="HexMarkerManage_Click" />
+                                    <Separator />
                                 </MenuItem>
-                                <MenuItem Header="Asus">
-                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
-                                </MenuItem>
-                                <MenuItem Header="Dell">
-                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
-                                </MenuItem>
-                                <MenuItem Header="HP">
-                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
-                                </MenuItem>
-                                <MenuItem Header="Lenovo">
-                                    <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
-                                </MenuItem> -->
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
