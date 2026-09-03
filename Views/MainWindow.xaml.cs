@@ -2455,18 +2455,14 @@ public partial class MainWindow : Window
                     SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
                     stageWatch.Stop();
                     readElapsed = stageWatch.Elapsed;
-                    stageWatch.Restart();
-                    readOk = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
-                    stageWatch.Stop();
-                    verifyElapsed = stageWatch.Elapsed;
-                }
-
-                if (_programmer is not RT809HSDKProgrammer)
-                {
                     AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(_buffer.Length, readElapsed)})");
                     RebuildRows();
                     UpdateStatus();
                     AppendLog("Script stage: verify started");
+                    stageWatch.Restart();
+                    readOk = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
+                    stageWatch.Stop();
+                    verifyElapsed = stageWatch.Elapsed;
                 }
 
                 AppendLog(readOk
