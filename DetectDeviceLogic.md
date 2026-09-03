@@ -83,7 +83,7 @@ CH347 detection flow:
 When the programmer selector is set to `Auto`, `MainWindow.ApplyProgrammerDetection()` prefers devices in this order:
 
 ```text
-T48 -> RT809H -> RT809F -> CH347 -> CH341
+CH341 -> CH347 -> RT809F -> RT809H -> T48
 ```
 
 So if both RT809F and RT809H are reported as present, Auto selects RT809H first.

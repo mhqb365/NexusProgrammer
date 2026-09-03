@@ -81,11 +81,11 @@ public partial class MainWindow : Window
     private readonly List<ProgrammerOption> _programmerOptions =
     [
         new("auto", "Auto"),
-        new("t48", "XGecu T48"),
+        new("ch341", "CH341"),
+        new("ch347", "CH347"),
         new("rt809f", "RT809F"),
         new("rt809h", "RT809H"),
-        new("ch347", "CH347"),
-        new("ch341", "CH341")
+        new("t48", "T48")
     ];
     private List<IcCandidate> _icCatalog = [];
     private readonly DispatcherTimer _programmerMonitorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
@@ -622,21 +622,9 @@ public partial class MainWindow : Window
 
         if (selectedMode == "auto")
         {
-            if (detection.T48Detected)
+            if (detection.Ch341Detected)
             {
-                SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", logWhenChanged, forceLog);
-                return;
-            }
-
-            if (detection.Rt809hDetected)
-            {
-                SetConnectedProgrammer("rt809h", new RT809HSDKProgrammer(), "RT809H connected", logWhenChanged, forceLog);
-                return;
-            }
-
-            if (detection.Rt809fDetected)
-            {
-                SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
+                SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", logWhenChanged, forceLog);
                 return;
             }
 
@@ -646,9 +634,21 @@ public partial class MainWindow : Window
                 return;
             }
 
-            if (detection.Ch341Detected)
+            if (detection.Rt809fDetected)
             {
-                SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", logWhenChanged, forceLog);
+                SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
+                return;
+            }
+
+            if (detection.Rt809hDetected)
+            {
+                SetConnectedProgrammer("rt809h", new RT809HSDKProgrammer(), "RT809H connected", logWhenChanged, forceLog);
+                return;
+            }
+
+            if (detection.T48Detected)
+            {
+                SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", logWhenChanged, forceLog);
                 return;
             }
         }
