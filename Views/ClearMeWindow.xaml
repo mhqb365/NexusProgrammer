@@ -43,14 +43,14 @@
                     <ComboBox x:Name="MeRegionCombo" Grid.Row="1" Grid.Column="1"
                         Height="24" Margin="0,0,8,6" />
                     <Button Grid.Row="1" Grid.Column="2" Height="24" Margin="0,0,0,6"
-                        Click="BrowseMeRegion_Click">Browse...</Button>
+                        Click="BrowseMeRegion_Click">Select</Button>
 
                     <TextBlock Grid.Row="2" Grid.Column="0" Text="FIT"
                         VerticalAlignment="Center" />
                     <ComboBox x:Name="FitCombo" Grid.Row="2" Grid.Column="1"
                         Height="24" Margin="0,0,8,6" />
                     <Button Grid.Row="2" Grid.Column="2" Height="24" Margin="0,0,0,6"
-                        Click="BrowseFit_Click">Browse...</Button>
+                        Click="BrowseFit_Click">Select</Button>
 
                     <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
                         Orientation="Horizontal" Margin="0,2,0,6" VerticalAlignment="Center">
@@ -107,14 +107,14 @@
                     <ComboBox x:Name="DualMeRegionCombo" Grid.Row="2" Grid.Column="1"
                         Height="24" Margin="0,0,8,6" />
                     <Button Grid.Row="2" Grid.Column="2" Height="24" Margin="0,0,0,6"
-                        Click="BrowseDualMeRegion_Click">Browse...</Button>
+                        Click="BrowseDualMeRegion_Click">Select</Button>
 
                     <TextBlock Grid.Row="3" Grid.Column="0" Text="FIT"
                         VerticalAlignment="Center" />
                     <ComboBox x:Name="DualFitCombo" Grid.Row="3" Grid.Column="1"
                         Height="24" Margin="0,0,8,6" />
                     <Button Grid.Row="3" Grid.Column="2" Height="24" Margin="0,0,0,6"
-                        Click="BrowseDualFit_Click">Browse...</Button>
+                        Click="BrowseDualFit_Click">Select</Button>
 
                     <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
                         Orientation="Horizontal" Margin="0,2,0,6" VerticalAlignment="Center">

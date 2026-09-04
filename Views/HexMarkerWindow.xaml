@@ -22,9 +22,58 @@
             <ColumnDefinition Width="92" />
         </Grid.ColumnDefinitions>
 
-        <ListBox x:Name="MarkerList" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
-            Margin="0,0,0,8" DisplayMemberPath="Name"
-            SelectionChanged="MarkerList_SelectionChanged" />
+        <DataGrid x:Name="MarkerList" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+            Margin="0,0,0,8"
+            AutoGenerateColumns="False"
+            CanUserAddRows="False"
+            HeadersVisibility="Column"
+            SelectionMode="Single"
+            SelectionUnit="FullRow"
+            IsReadOnly="True"
+            RowHeight="22"
+            ColumnHeaderHeight="24"
+            Background="{DynamicResource SurfaceBackgroundBrush}"
+            Foreground="{DynamicResource TextBrush}"
+            GridLinesVisibility="All"
+            HorizontalGridLinesBrush="{DynamicResource GridLineBrush}"
+            VerticalGridLinesBrush="{DynamicResource LightGridLineBrush}"
+            BorderBrush="{DynamicResource SplitterBrush}"
+            SelectionChanged="MarkerList_SelectionChanged">
+            <DataGrid.Resources>
+                <Style TargetType="{x:Type DataGridCell}">
+                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                    <Setter Property="Background" Value="{DynamicResource SurfaceBackgroundBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource LightGridLineBrush}" />
+                    <Setter Property="BorderThickness" Value="0" />
+                    <Setter Property="Padding" Value="4,1" />
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background"
+                                Value="{DynamicResource SelectionBackgroundBrush}" />
+                            <Setter Property="Foreground"
+                                Value="{DynamicResource SelectionForegroundBrush}" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+                <Style TargetType="{x:Type DataGridColumnHeader}">
+                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource GridLineBrush}" />
+                    <Setter Property="BorderThickness" Value="0,0,1,1" />
+                    <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}" />
+                    <Setter Property="Padding" Value="4,2" />
+                </Style>
+                <Style TargetType="{x:Type DataGridRow}">
+                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                    <Setter Property="Background" Value="{DynamicResource SurfaceBackgroundBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource GridLineBrush}" />
+                    <Setter Property="BorderThickness" Value="0,0,0,1" />
+                </Style>
+            </DataGrid.Resources>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="160" />
+                <DataGridTextColumn Header="Value" Binding="{Binding Hex}" Width="*" />
+            </DataGrid.Columns>
+        </DataGrid>
 
         <TextBlock Grid.Row="1" Grid.Column="0" Text="Name" VerticalAlignment="Center" />
         <TextBox x:Name="NameBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
@@ -36,10 +85,10 @@
 
         <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3"
             Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Width="76" Height="26" Margin="0,0,8,0" Click="New_Click">New</Button>
             <Button Width="76" Height="26" Margin="0,0,8,0" Click="Add_Click">Add</Button>
             <Button Width="76" Height="26" Margin="0,0,8,0" Click="Update_Click">Update</Button>
             <Button Width="76" Height="26" Margin="0,0,8,0" Click="Delete_Click">Delete</Button>
-            <Button Width="76" Height="26" IsCancel="True">Close</Button>
         </StackPanel>
     </Grid>
 </Window>

@@ -1268,6 +1268,12 @@ public partial class MainWindow : Window
         WindowsKeyMenuButton.ContextMenu.IsOpen = true;
     }
 
+    private void HexMarkerButton_Click(object sender, RoutedEventArgs e)
+    {
+        HexMarkerButton.ContextMenu.PlacementTarget = HexMarkerButton;
+        HexMarkerButton.ContextMenu.IsOpen = true;
+    }
+
     private void HexMarkerManage_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new HexMarkerWindow(_hexMarkers)
@@ -1581,6 +1587,7 @@ public partial class MainWindow : Window
         HexSearchNextButton.IsEnabled = enabled;
         HexReplaceButton.IsEnabled = enabled;
         WindowsKeyMenuButton.IsEnabled = enabled;
+        HexMarkerButton.IsEnabled = enabled;
         HexSearchWindowButton.IsEnabled = enabled;
         HexReplaceWindowButton.IsEnabled = enabled;
         GoToOffsetButton.IsEnabled = enabled;

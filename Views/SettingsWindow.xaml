@@ -33,14 +33,14 @@
         <TextBox x:Name="MeRegionRootBox" Grid.Row="1" Grid.Column="1"
             Height="24" Margin="0,0,8,6" />
         <Button Grid.Row="1" Grid.Column="2" Height="24" Margin="0,0,0,6"
-            Click="BrowseMeRegionRoot_Click">Browse...</Button>
+            Click="BrowseMeRegionRoot_Click">Select</Button>
 
         <TextBlock Grid.Row="2" Grid.Column="0" Text="FIT root"
             VerticalAlignment="Center" />
         <TextBox x:Name="FitRootBox" Grid.Row="2" Grid.Column="1"
             Height="24" Margin="0,0,8,6" />
         <Button Grid.Row="2" Grid.Column="2" Height="24" Margin="0,0,0,6"
-            Click="BrowseFitRoot_Click">Browse...</Button>
+            Click="BrowseFitRoot_Click">Select</Button>
 
         <TextBlock Grid.Row="3" Grid.Column="0" Text="Theme"
             VerticalAlignment="Center" />

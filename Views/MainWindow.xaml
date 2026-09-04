@@ -614,7 +614,7 @@
                     <Button x:Name="WindowsKeyMenuButton" DockPanel.Dock="Right"
                         Width="70" Height="20" Margin="2,4,2,4" Padding="0"
                         Style="{StaticResource HexHeaderButtonStyle}"
-                        ToolTip="BIOS tools" Click="WindowsKeyMenuButton_Click">Menu <Button.ContextMenu>
+                        ToolTip="BIOS tools" Click="WindowsKeyMenuButton_Click">Tools <Button.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
                                 <MenuItem Header="Merge BIOS" Click="MergeBios_Click" />
@@ -624,11 +624,17 @@
                                 <MenuItem Header="Unlock ASUS" Click="UnlockAsus_Click" />
                                 <MenuItem Header="Unlock DELL 8FC8" Click="Unlock8Fc8_Click" />
                                 <MenuItem Header="Unlock HP" Click="UnlockHp_Click" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                    <Button x:Name="HexMarkerButton" DockPanel.Dock="Right"
+                        Width="82" Height="20" Margin="2,4,2,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
+                        ToolTip="Hex marker" Click="HexMarkerButton_Click">Hex Marker
+                        <Button.ContextMenu>
+                            <ContextMenu x:Name="HexMarkerMenuItem">
+                                <MenuItem Header="Manage" Click="HexMarkerManage_Click" />
                                 <Separator />
-                                <MenuItem x:Name="HexMarkerMenuItem" Header="Hex Marker">
-                                    <MenuItem Header="Manage" Click="HexMarkerManage_Click" />
-                                    <Separator />
-                                </MenuItem>
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
@@ -636,14 +642,14 @@
                         Width="70" Height="20" Margin="2,4,2,4" Padding="0"
                         Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Open replace dialog" Click="HexReplace_Click">Replace</Button>
-                    <Button x:Name="HexSearchWindowButton" DockPanel.Dock="Right"
-                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
-                        Style="{StaticResource HexHeaderButtonStyle}"
-                        ToolTip="Open hex search" Click="HexSearchWindowButton_Click">Search</Button>
                     <Button x:Name="GoToOffsetButton" DockPanel.Dock="Right"
                         Width="70" Height="20" Margin="2,4,2,4" Padding="0"
                         Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Go to offset" Click="GoToOffset_Click">Go to</Button>
+                    <Button x:Name="HexSearchWindowButton" DockPanel.Dock="Right"
+                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
+                        ToolTip="Open hex search" Click="HexSearchWindowButton_Click">Search</Button>
                     <Button x:Name="HexSearchNextButton" DockPanel.Dock="Right" Width="24"
                         Height="20" Margin="2,4,2,4" Padding="0" ToolTip="Find next"
                         Visibility="Collapsed"

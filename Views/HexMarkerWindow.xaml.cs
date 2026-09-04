@@ -28,6 +28,14 @@ public partial class HexMarkerWindow : Window
         HexBox.Text = marker.Hex;
     }
 
+    private void New_Click(object sender, RoutedEventArgs e)
+    {
+        MarkerList.SelectedItem = null;
+        NameBox.Clear();
+        HexBox.Clear();
+        NameBox.Focus();
+    }
+
     private void Add_Click(object sender, RoutedEventArgs e)
     {
         if (!TryReadMarker(out var marker))
