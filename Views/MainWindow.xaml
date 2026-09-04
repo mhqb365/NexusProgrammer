@@ -6,9 +6,9 @@
     xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
     xmlns:sys="clr-namespace:System;assembly=mscorlib" Title="Nexus Programmer"
     Icon="/Assets/icon.ico"
-    Height="620"
+    Height="650"
     Width="960"
-    MinHeight="620" MinWidth="960" FontFamily="Segoe UI" FontSize="13"
+    MinHeight="650" MinWidth="960" FontFamily="Segoe UI" FontSize="13"
     Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource TextBrush}">
     <Window.InputBindings>
         <KeyBinding Key="N" Modifiers="Control"
@@ -19,6 +19,12 @@
             Command="{x:Static local:MainWindow.OpenFileCommand}" />
         <KeyBinding Key="S" Modifiers="Control"
             Command="{x:Static local:MainWindow.SaveFileCommand}" />
+        <KeyBinding Key="G" Modifiers="Control"
+            Command="{x:Static local:MainWindow.GoToOffsetCommand}" />
+        <KeyBinding Key="F" Modifiers="Control"
+            Command="{x:Static local:MainWindow.SearchCommand}" />
+        <KeyBinding Key="H" Modifiers="Control"
+            Command="{x:Static local:MainWindow.ReplaceCommand}" />
         <KeyBinding Key="Q" Modifiers="Control" Command="{x:Static local:MainWindow.ExitCommand}" />
     </Window.InputBindings>
     <Window.Resources>
@@ -594,6 +600,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="34" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="28" />
                 </Grid.RowDefinitions>
 
                 <DockPanel Grid.Row="0" Background="{DynamicResource SubtleBackgroundBrush}"
@@ -619,36 +626,53 @@
                                 <MenuItem Header="Unlock HP" Click="UnlockHp_Click" />
                                 <Separator />
                                 <MenuItem x:Name="HexMarkerMenuItem" Header="Hex Marker">
-                                    <MenuItem Header="Manage..." Click="HexMarkerManage_Click" />
+                                    <MenuItem Header="Manage" Click="HexMarkerManage_Click" />
                                     <Separator />
                                 </MenuItem>
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
+                    <Button x:Name="HexReplaceWindowButton" DockPanel.Dock="Right"
+                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
+                        ToolTip="Open replace dialog" Click="HexReplace_Click">Replace</Button>
+                    <Button x:Name="HexSearchWindowButton" DockPanel.Dock="Right"
+                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
+                        ToolTip="Open hex search" Click="HexSearchWindowButton_Click">Search</Button>
+                    <Button x:Name="GoToOffsetButton" DockPanel.Dock="Right"
+                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
+                        ToolTip="Go to offset" Click="GoToOffset_Click">Go to</Button>
                     <Button x:Name="HexSearchNextButton" DockPanel.Dock="Right" Width="24"
                         Height="20" Margin="2,4,2,4" Padding="0" ToolTip="Find next"
+                        Visibility="Collapsed"
                         Style="{StaticResource HexHeaderButtonStyle}"
                         Click="HexSearchNext_Click">
                         <iconPacks:PackIconLucide Width="10" Height="10" Kind="ChevronRight" />
                     </Button>
                     <Button x:Name="HexSearchPreviousButton" DockPanel.Dock="Right"
                         Width="24" Height="20" Margin="2,4,2,4" Padding="0"
+                        Visibility="Collapsed"
                         Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Find previous" Click="HexSearchPrevious_Click">
                         <iconPacks:PackIconLucide Width="10" Height="10" Kind="ChevronLeft" />
                     </Button>
                     <Button x:Name="HexReplaceButton" DockPanel.Dock="Right" Width="64"
                         Height="20" Margin="2,4,2,4" Padding="0"
+                        Visibility="Collapsed"
                         Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Open replace dialog" Click="HexReplace_Click">Replace</Button>
                     <Button x:Name="HexSearchAllButton" DockPanel.Dock="Right" Width="34"
                         Height="20" Margin="2,4,2,4" Padding="0"
+                        Visibility="Collapsed"
                         Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Find all matches and log offsets"
                         Click="HexSearchAll_Click">All</Button>
                     <ComboBox x:Name="HexSearchModeCombo" DockPanel.Dock="Right" Width="82"
                         Height="24" Margin="6,4,8,4" IsTextSearchEnabled="False"
-                        SelectedIndex="0">
+                        Visibility="Collapsed"
+                        SelectedIndex="1">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding}"
@@ -659,14 +683,16 @@
                         <sys:String>Text</sys:String>
                         <sys:String>Offset</sys:String>
                     </ComboBox>
-                    <Button x:Name="HexSearchClearButton" DockPanel.Dock="Right" Width="24"
-                        Height="20" Margin="4,4,0,4" Padding="0" Visibility="Collapsed"
+                    <Button x:Name="HexSearchClearButton" DockPanel.Dock="Right" Width="0"
+                        Height="20" Margin="0" Padding="0" Visibility="Collapsed"
+                        IsHitTestVisible="False"
                         Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Clear search" Click="HexSearchClear_Click">
                         <iconPacks:PackIconLucide Width="12" Height="12" Kind="X" />
                     </Button>
                     <TextBox x:Name="HexSearchBox" Height="20" Margin="0,4,0,4"
                         ToolTip="Hex/Text finds an offset. Offset mode opens that page for editing."
+                        Visibility="Collapsed"
                         KeyDown="HexSearchBox_KeyDown"
                         TextChanged="HexSearchBox_TextChanged" Text="" />
                 </DockPanel>
@@ -693,6 +719,18 @@
                     <TabItem x:Name="AddMemoryTab" Header="+" ToolTip="Add Memory tab"
                         PreviewMouseLeftButtonDown="AddMemoryTab_MouseDown" />
                 </TabControl>
+                <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,1,1"
+                    Background="{DynamicResource SurfaceBackgroundBrush}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                        Margin="8,0,0,0">
+                        <TextBlock x:Name="OffsetStatusText" Text="Offset(h): 0"
+                            Margin="0,0,18,0" />
+                        <TextBlock x:Name="BlockStatusText" Text="Block(h): 0"
+                            Margin="0,0,18,0" />
+                        <TextBlock x:Name="LengthStatusText" Text="Length(h): 1" />
+                    </StackPanel>
+                </Border>
             </Grid>
 
             <GridSplitter Grid.Row="1" Grid.Column="1" Height="5" HorizontalAlignment="Stretch"
@@ -730,7 +768,7 @@
                     </StackPanel>
                 </Grid>
 
-                <TabControl Grid.Row="1">
+                <TabControl x:Name="ResultsTabControl" Grid.Row="1">
                     <TabItem Header="Log">
                         <TextBox x:Name="LogBox" Height="Auto" Margin="0" FontFamily="Consolas"
                             FontSize="12" VerticalScrollBarVisibility="Auto"
@@ -739,7 +777,7 @@
                             Background="{DynamicResource SurfaceBackgroundBrush}"
                             Foreground="{DynamicResource TextBrush}" />
                     </TabItem>
-                    <TabItem Header="Search">
+                    <TabItem x:Name="SearchResultsTab" Header="Search">
                         <DataGrid x:Name="SearchHitsGrid" AutoGenerateColumns="False"
                             CanUserAddRows="False" CanUserDeleteRows="False" IsReadOnly="True"
                             HeadersVisibility="None" GridLinesVisibility="Vertical"

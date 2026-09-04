@@ -60,6 +60,9 @@ You can download the latest release from the [Releases page](https://github.com/
 - Ctrl + N: Create a new ROM buffer
 - Ctrl + O: Open a ROM file
 - Ctrl + S: Save a ROM file
+- Ctrl + G: Go to offset
+- Ctrl + F: Search
+- Ctrl + H: Replace
 - Ctrl + Q: Exit the application
 
 ## License
@@ -128,6 +131,9 @@ Bạn có thể tải bản phát hành mới nhất tại [trang Releases](http
 - Ctrl + N: Tạo buffer ROM mới
 - Ctrl + O: Mở file ROM
 - Ctrl + S: Lưu file ROM
+- Ctrl + G: Nhảy đến offset
+- Ctrl + F: Tìm kiếm
+- Ctrl + H: Thay thế
 - Ctrl + Q: Thoát ứng dụng
 
 ## Giấy phép

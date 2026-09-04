@@ -87,6 +87,8 @@ public sealed class HexEditorView : FrameworkElement
 
     public event EventHandler? FillSelectionRequested;
 
+    public event EventHandler? SelectionChanged;
+
     public void ScrollToOffset(int offset)
     {
         if (_buffer.Length == 0)
@@ -283,7 +285,6 @@ public sealed class HexEditorView : FrameworkElement
             MoveCaretTo(offset, extendSelection: true);
             _isSelecting = true;
             CaptureMouse();
-            InvalidateVisual();
             return;
         }
 
@@ -292,6 +293,8 @@ public sealed class HexEditorView : FrameworkElement
         _selectionEnd = offset;
         _isSelecting = true;
         CaptureMouse();
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
         InvalidateVisual();
     }
 
@@ -306,6 +309,7 @@ public sealed class HexEditorView : FrameworkElement
         {
             _selectedOffset = offset;
             _selectionEnd = offset;
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
             InvalidateVisual();
         }
     }
@@ -497,7 +501,9 @@ public sealed class HexEditorView : FrameworkElement
             SetFirstLine(Math.Max(0, line - visibleLines / 2));
         }
 
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
         InvalidateVisual();
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void SetByte(int offset, byte value)

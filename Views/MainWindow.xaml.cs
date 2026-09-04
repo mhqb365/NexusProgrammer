@@ -40,6 +40,21 @@ public partial class MainWindow : Window
         nameof(SaveFileCommand),
         typeof(MainWindow),
         [new KeyGesture(Key.S, ModifierKeys.Control)]);
+    public static readonly RoutedUICommand GoToOffsetCommand = new(
+        "Go to",
+        nameof(GoToOffsetCommand),
+        typeof(MainWindow),
+        [new KeyGesture(Key.G, ModifierKeys.Control)]);
+    public static readonly RoutedUICommand SearchCommand = new(
+        "Search",
+        nameof(SearchCommand),
+        typeof(MainWindow),
+        [new KeyGesture(Key.F, ModifierKeys.Control)]);
+    public static readonly RoutedUICommand ReplaceCommand = new(
+        "Replace",
+        nameof(ReplaceCommand),
+        typeof(MainWindow),
+        [new KeyGesture(Key.H, ModifierKeys.Control)]);
     public static readonly RoutedUICommand ExitCommand = new(
         "Exit",
         nameof(ExitCommand),
@@ -103,7 +118,8 @@ public partial class MainWindow : Window
     private bool _isApplyingDetectedChip;
     private bool _isSearching;
     private bool _updatingHexScrollBar;
-    private ReplaceDialog? _replaceDialog;
+    private HexSearchWindow? _hexSearchWindow;
+    private HexReplaceWindow? _hexReplaceWindow;
 
     public MainWindow()
     {
@@ -112,6 +128,9 @@ public partial class MainWindow : Window
         CommandBindings.Add(new CommandBinding(NewWindowCommand, NewWindowCommand_Executed));
         CommandBindings.Add(new CommandBinding(OpenFileCommand, OpenFileCommand_Executed));
         CommandBindings.Add(new CommandBinding(SaveFileCommand, SaveFileCommand_Executed));
+        CommandBindings.Add(new CommandBinding(GoToOffsetCommand, GoToOffsetCommand_Executed));
+        CommandBindings.Add(new CommandBinding(SearchCommand, SearchCommand_Executed));
+        CommandBindings.Add(new CommandBinding(ReplaceCommand, ReplaceCommand_Executed));
         CommandBindings.Add(new CommandBinding(ExitCommand, ExitCommand_Executed));
         _icCatalog = IcCatalogLoader.LoadSpiCatalog();
         _chips.AddRange(_icCatalog.Select(x => x.Profile));
@@ -383,6 +402,7 @@ public partial class MainWindow : Window
     {
         editor.ClearBufferRequested += HexEditor_ClearBufferRequested;
         editor.FillSelectionRequested += HexEditor_FillSelectionRequested;
+        editor.SelectionChanged += HexEditor_SelectionChanged;
     }
 
     private bool ActivateMemoryTab(TabItem tab)
@@ -1268,8 +1288,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        HexSearchModeCombo.SelectedItem = "Hex";
-        HexSearchBox.Text = marker.Hex;
+        SetHexSearchInputs("Hex", marker.Hex);
         await RunSearchAsync(forward: true);
     }
 
@@ -1304,6 +1323,60 @@ public partial class MainWindow : Window
 
     private async void HexReplace_Click(object sender, RoutedEventArgs e) => await RunReplaceDialogAsync();
 
+    private void GoToOffset_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new GoToOffsetWindow(_buffer.Length)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            ViewOffset(dialog.TargetOffset);
+        }
+    }
+
+    private void HexSearchWindowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_hexSearchWindow is not null)
+        {
+            _hexSearchWindow.Activate();
+            return;
+        }
+
+        var dialog = new HexSearchWindow(
+            CurrentHexSearchMode(),
+            HexSearchBox.Text,
+            RunSearchFromWindowAsync,
+            RunSearchAllFromWindowAsync)
+        {
+            Owner = this
+        };
+        _hexSearchWindow = dialog;
+        dialog.Closed += (_, _) => _hexSearchWindow = null;
+        dialog.Show();
+    }
+
+    private async Task<bool> RunSearchFromWindowAsync(string mode, string query, bool forward)
+    {
+        SetHexSearchInputs(mode, query);
+        await RunSearchAsync(forward);
+        return CountRealSearchHits() > 0;
+    }
+
+    private async Task<bool> RunSearchAllFromWindowAsync(string mode, string query)
+    {
+        SetHexSearchInputs(mode, query);
+        await RunSearchAllAsync();
+        return CountRealSearchHits() > 0;
+    }
+
+    private void SetHexSearchInputs(string mode, string query)
+    {
+        HexSearchModeCombo.SelectedItem = mode;
+        HexSearchBox.Text = query;
+    }
+
     private void HexSearchClear_Click(object sender, RoutedEventArgs e)
     {
         HexSearchBox.Clear();
@@ -1312,9 +1385,7 @@ public partial class MainWindow : Window
 
     private void HexSearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
-        HexSearchClearButton.Visibility = string.IsNullOrEmpty(HexSearchBox.Text)
-            ? Visibility.Collapsed
-            : Visibility.Visible;
+        HexSearchClearButton.Visibility = Visibility.Collapsed;
     }
 
     private void SearchHitsGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -1337,6 +1408,16 @@ public partial class MainWindow : Window
     }
 
     private void HexEditor_ScrollChanged(object sender, EventArgs e) => UpdateHexScrollBar();
+
+    private void HexEditor_SelectionChanged(object? sender, EventArgs e)
+    {
+        if (sender is HexEditorView editor)
+        {
+            UpdateSelectionStatus(editor);
+        }
+    }
+
+    private int CountRealSearchHits() => _searchHits.Count(hit => hit.Offset >= 0 && hit.Length > 0);
 
     private void HexScrollBar_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -1447,23 +1528,29 @@ public partial class MainWindow : Window
             return Task.CompletedTask;
         }
 
-        if (_replaceDialog is not null)
-        {
-            _replaceDialog.Activate();
-            return Task.CompletedTask;
-        }
-
-        var dialog = new ReplaceDialog(mode, RunReplaceFromDialogAsync)
-        {
-            Owner = this
-        };
-        _replaceDialog = dialog;
-        dialog.Closed += (_, _) => _replaceDialog = null;
-        dialog.Show();
+        ShowReplaceWindow(mode, HexSearchBox.Text);
         return Task.CompletedTask;
     }
 
-    private async Task RunReplaceFromDialogAsync(string replacementText, bool replaceAll)
+    private void ShowReplaceWindow(string mode, string query)
+    {
+        if (_hexReplaceWindow is not null)
+        {
+            _hexReplaceWindow.Activate();
+            return;
+        }
+
+        var replaceMode = string.Equals(mode, "Hex", StringComparison.OrdinalIgnoreCase) ? "Hex" : "Text";
+        var dialog = new HexReplaceWindow(replaceMode, query, RunReplaceFromWindowDialogAsync)
+        {
+            Owner = this
+        };
+        _hexReplaceWindow = dialog;
+        dialog.Closed += (_, _) => _hexReplaceWindow = null;
+        dialog.Show();
+    }
+
+    private async Task RunReplaceFromWindowDialogAsync(string mode, string query, string replacementText, bool replaceAll, bool forward)
     {
         if (_isSearching)
         {
@@ -1471,11 +1558,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        SetHexSearchInputs(mode, query);
         _isSearching = true;
         SetSearchControlsEnabled(false);
         try
         {
-            await ReplaceHexViewAsync(replaceAll, replacementText);
+            await ReplaceHexViewAsync(replaceAll, replacementText, forward);
         }
         finally
         {
@@ -1493,6 +1581,9 @@ public partial class MainWindow : Window
         HexSearchNextButton.IsEnabled = enabled;
         HexReplaceButton.IsEnabled = enabled;
         WindowsKeyMenuButton.IsEnabled = enabled;
+        HexSearchWindowButton.IsEnabled = enabled;
+        HexReplaceWindowButton.IsEnabled = enabled;
+        GoToOffsetButton.IsEnabled = enabled;
     }
 
     private string CurrentHexSearchMode() => HexSearchModeCombo.SelectedItem as string ?? "Offset";
@@ -1599,7 +1690,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ReplaceHexViewAsync(bool replaceAll, string replacementText)
+    private async Task ReplaceHexViewAsync(bool replaceAll, string replacementText, bool forward = true)
     {
         try
         {
@@ -1632,7 +1723,7 @@ public partial class MainWindow : Window
                 ? await Task.Run(() => string.Equals(mode, "Text", StringComparison.OrdinalIgnoreCase)
                     ? FindAllAsciiText(_buffer, pattern)
                     : FindAllBytes(_buffer, pattern))
-                : await FindSingleReplaceOffsetAsync(mode, pattern);
+                : await FindSingleReplaceOffsetAsync(mode, pattern, forward);
             if (replaceAll)
             {
                 offsets = RemoveOverlappingMatches(offsets, pattern.Length);
@@ -1704,6 +1795,12 @@ public partial class MainWindow : Window
         {
             _searchHits.Add(CreateSearchHit(candidate.Offset, candidate.Length));
         }
+
+        UpdateSearchTabHeader(candidates.Count);
+        if (candidates.Count > 0)
+        {
+            ResultsTabControl.SelectedItem = SearchResultsTab;
+        }
     }
 
     private async Task<SearchResult> TryResolveSearchOffsetAsync(string mode, string query, bool forward)
@@ -1770,7 +1867,7 @@ public partial class MainWindow : Window
         return offset >= 0 ? SearchResult.Success(offset, pattern.Length) : SearchResult.Fail(notFoundMessage);
     }
 
-    private async Task<List<int>> FindSingleReplaceOffsetAsync(string mode, byte[] pattern)
+    private async Task<List<int>> FindSingleReplaceOffsetAsync(string mode, byte[] pattern, bool forward)
     {
         var selectedOffset = HexEditor.SelectedOffset;
         if ((uint)selectedOffset < _buffer.Length && selectedOffset <= _buffer.Length - pattern.Length)
@@ -1785,8 +1882,8 @@ public partial class MainWindow : Window
         }
 
         var result = string.Equals(mode, "Text", StringComparison.OrdinalIgnoreCase)
-            ? await SearchTextAsync(Encoding.ASCII.GetString(pattern), forward: true, $"{mode} not found")
-            : await SearchPatternAsync(pattern, forward: true, "Hex pattern not found");
+            ? await SearchTextAsync(Encoding.ASCII.GetString(pattern), forward, $"{mode} not found")
+            : await SearchPatternAsync(pattern, forward, "Hex pattern not found");
         return result.Found ? [result.Offset] : [];
     }
 
@@ -1877,11 +1974,14 @@ public partial class MainWindow : Window
     private void ShowSearchHits(IReadOnlyList<int> offsets, string query, string status)
     {
         _searchHits.Clear();
+        UpdateSearchTabHeader(offsets.Count);
         if (offsets.Count == 0)
         {
             _searchHits.Add(SearchHit.Message(status));
             return;
         }
+
+        ResultsTabControl.SelectedItem = SearchResultsTab;
 
         var length = Math.Max(1, CurrentHexSearchMode().Equals("Text", StringComparison.OrdinalIgnoreCase)
             ? Encoding.ASCII.GetByteCount(query)
@@ -1890,6 +1990,11 @@ public partial class MainWindow : Window
         {
             _searchHits.Add(CreateSearchHit(offset, length));
         }
+    }
+
+    private void UpdateSearchTabHeader(int hitCount)
+    {
+        SearchResultsTab.Header = $"Search ({hitCount} hits)";
     }
 
     private SearchHit CreateSearchHit(int offset, int length)
@@ -2187,6 +2292,21 @@ public partial class MainWindow : Window
         SaveFile_Click(sender, e);
     }
 
+    private void GoToOffsetCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        GoToOffset_Click(sender, e);
+    }
+
+    private void SearchCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        HexSearchWindowButton_Click(sender, e);
+    }
+
+    private void ReplaceCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        HexReplace_Click(sender, e);
+    }
+
     private void ExitCommand_Executed(object sender, ExecutedRoutedEventArgs e)
     {
         Exit_Click(sender, e);
@@ -2240,6 +2360,7 @@ public partial class MainWindow : Window
 
         _currentOffset = 0;
         _searchHits.Clear();
+        UpdateSearchTabHeader(0);
         RebuildRows();
         UpdateStatus();
         AppendLog($"Loaded {fileName} ({FormatBytes(_buffer.Length)})");
@@ -3053,6 +3174,26 @@ public partial class MainWindow : Window
     {
         SizeStatusText.Text = $"Size: {_buffer.Length}";
         BufferStatusText.Text = $"Buffer: {FormatBytes(_buffer.Length)}";
+        UpdateSelectionStatus(HexEditor);
+    }
+
+    private void UpdateSelectionStatus(HexEditorView editor)
+    {
+        if (_buffer.Length == 0 || editor.SelectionLength == 0)
+        {
+            OffsetStatusText.Text = "Offset(h): 0";
+            BlockStatusText.Text = "Block(h): 0";
+            LengthStatusText.Text = "Length(h): 0";
+            return;
+        }
+
+        var start = editor.SelectionStart;
+        var end = start + editor.SelectionLength - 1;
+        OffsetStatusText.Text = $"Offset(h): {editor.SelectedOffset:X}";
+        BlockStatusText.Text = start == end
+            ? $"Block(h): {start:X}"
+            : $"Block(h): {start:X}-{end:X}";
+        LengthStatusText.Text = $"Length(h): {editor.SelectionLength:X}";
     }
 
     private void AppendLog(string message)
