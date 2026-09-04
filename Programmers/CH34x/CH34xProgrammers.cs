@@ -23,29 +23,14 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
     public static bool CanOpenDevice()
     {
-        if (!WchUsbDeviceDetector.HasPresentDevice("VID_1A86", "PID_55DA", "PID_55DB"))
-        {
-            return false;
-        }
-
         var handle = NativeMethods.CH347OpenDevice(DeviceIndex);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
             return false;
         }
 
-        try
-        {
-            return NativeMethods.CH347SPI_Init(DeviceIndex, in SpiConfig.Default);
-        }
-        catch
-        {
-            return false;
-        }
-        finally
-        {
-            NativeMethods.CH347CloseDevice(DeviceIndex);
-        }
+        NativeMethods.CH347CloseDevice(DeviceIndex);
+        return true;
     }
 
     public async Task<bool> DetectAsync(IProgress<int> progress)
@@ -579,29 +564,14 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
     public static bool CanOpenDevice()
     {
-        if (!WchUsbDeviceDetector.HasPresentDevice("VID_1A86", "PID_5512"))
-        {
-            return false;
-        }
-
         var handle = NativeMethods.CHOpenDevice(DeviceIndex);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
             return false;
         }
 
-        try
-        {
-            return NativeMethods.CHSetStream(DeviceIndex, StreamMode);
-        }
-        catch
-        {
-            return false;
-        }
-        finally
-        {
-            NativeMethods.CHCloseDevice(DeviceIndex);
-        }
+        NativeMethods.CHCloseDevice(DeviceIndex);
+        return true;
     }
 
     public async Task<bool> DetectAsync(IProgress<int> progress)
