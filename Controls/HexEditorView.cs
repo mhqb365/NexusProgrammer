@@ -38,6 +38,8 @@ public sealed class HexEditorView : FrameworkElement
     private readonly Stack<EditBatch> _undo = [];
     private readonly Stack<EditBatch> _redo = [];
     private readonly HashSet<int> _editedOffsets = [];
+    private readonly MenuItem _copyItem;
+    private readonly MenuItem _pasteItem;
     private readonly MenuItem _fillSelectionItem;
 
     public HexEditorView()
@@ -45,12 +47,27 @@ public sealed class HexEditorView : FrameworkElement
         Focusable = true;
         ClipToBounds = true;
 
+        _copyItem = new MenuItem { Header = "Copy" };
+        _copyItem.Click += (_, _) => CopySelection();
+        _pasteItem = new MenuItem { Header = "Paste" };
+        _pasteItem.Click += (_, _) => PasteClipboard();
         _fillSelectionItem = new MenuItem { Header = "Fill selection" };
-        _fillSelectionItem.Click += (_, _) => FillSelectionRequested?.Invoke(this, EventArgs.Empty);
+        _fillSelectionItem.Click += (_, _) =>
+        {
+            if (SelectionLength > 1)
+            {
+                FillSelectionRequested?.Invoke(this, EventArgs.Empty);
+            }
+        };
         var clearBufferItem = new MenuItem { Header = "Clear buffer" };
         clearBufferItem.Click += (_, _) => ClearBufferRequested?.Invoke(this, EventArgs.Empty);
-        ContextMenu = new ContextMenu { Items = { clearBufferItem, new Separator(), _fillSelectionItem } };
-        ContextMenu.Opened += (_, _) => _fillSelectionItem.IsEnabled = SelectionLength > 0;
+        ContextMenu = new ContextMenu { Items = { _copyItem, _pasteItem, _fillSelectionItem, new Separator(), clearBufferItem } };
+        ContextMenu.Opened += (_, _) =>
+        {
+            _copyItem.IsEnabled = SelectionLength > 0;
+            _pasteItem.IsEnabled = Clipboard.ContainsText() && _buffer.Length > 0 && (uint)_selectedOffset < _buffer.Length;
+            _fillSelectionItem.IsEnabled = SelectionLength > 1;
+        };
     }
 
     public void SetBuffer(byte[] buffer, Action<int, byte> byteChanged)
@@ -158,7 +175,7 @@ public sealed class HexEditorView : FrameworkElement
 
     public bool FillSelection(byte[] pattern)
     {
-        if (pattern.Length == 0 || SelectionLength == 0)
+        if (pattern.Length == 0 || SelectionLength <= 1)
         {
             return false;
         }
