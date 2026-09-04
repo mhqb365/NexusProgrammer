@@ -12,9 +12,11 @@ internal sealed class MemoryTabState
         Editor = editor;
         ScrollBar = scrollBar;
         Buffer = buffer;
+        DisplayName = $"Memory {index}";
     }
 
     public int Index { get; set; }
+    public string DisplayName { get; set; }
     public TabItem Tab { get; }
     public HexEditorView Editor { get; }
     public ScrollBar ScrollBar { get; }

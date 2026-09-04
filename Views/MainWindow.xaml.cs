@@ -140,6 +140,7 @@ public partial class MainWindow : Window
         }
         _activeMemoryTab = new MemoryTabState(1, Bios1Tab, HexEditor, HexScrollBar, _buffer);
         _memoryTabs[Bios1Tab] = _activeMemoryTab;
+        Bios1Tab.Header = CreateMemoryTabHeader(_activeMemoryTab, canClose: false);
         SearchHitsGrid.ItemsSource = _searchHits;
         RefreshHexMarkerMenu();
         WireHexEditorActions(HexEditor);
@@ -234,7 +235,7 @@ public partial class MainWindow : Window
 
         if (ActivateMemoryTab(selectedTab) && IsLoaded && _activeMemoryTab is not null)
         {
-            AppendLog($"Selected {MemoryTabLabel(_activeMemoryTab.Index)}");
+            AppendLog($"Selected {MemoryTabDisplayName(_activeMemoryTab)}");
         }
     }
 
@@ -245,8 +246,9 @@ public partial class MainWindow : Window
         {
             Tag = index
         };
-        tab.Header = CreateClosableMemoryTabHeader(index, tab);
-        _memoryTabs[tab] = CreateMemoryTabState(index, tab);
+        var state = CreateMemoryTabState(index, tab);
+        tab.Header = CreateMemoryTabHeader(state, canClose: true);
+        _memoryTabs[tab] = state;
 
         MemoryTabControl.Items.Insert(Math.Max(0, MemoryTabControl.Items.Count - 1), tab);
         MemoryTabControl.SelectedItem = tab;
@@ -274,17 +276,30 @@ public partial class MainWindow : Window
         AddBiosTab();
     }
 
-    private StackPanel CreateClosableMemoryTabHeader(int index, TabItem tab)
+    private StackPanel CreateMemoryTabHeader(MemoryTabState state, bool canClose)
     {
         var header = new StackPanel
         {
-            Orientation = Orientation.Horizontal
+            Orientation = Orientation.Horizontal,
+            Tag = state.Tab
         };
+        var contextMenu = new ContextMenu();
+        var renameItem = new MenuItem { Header = "Rename", Tag = state.Tab };
+        renameItem.Click += RenameMemoryTab_Click;
+        contextMenu.Items.Add(renameItem);
+        header.ContextMenu = contextMenu;
         header.Children.Add(new TextBlock
         {
-            Text = MemoryTabLabel(index),
-            VerticalAlignment = VerticalAlignment.Center
+            Text = state.DisplayName,
+            VerticalAlignment = VerticalAlignment.Center,
+            Tag = "Title"
         });
+
+        if (!canClose)
+        {
+            return header;
+        }
+
         var closeButton = new TextBlock
         {
             Width = 18,
@@ -293,12 +308,85 @@ public partial class MainWindow : Window
             Text = "x",
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = $"Close {MemoryTabLabel(index)}",
-            Tag = tab
+            ToolTip = $"Close {state.DisplayName}",
+            Tag = state.Tab
         };
         closeButton.PreviewMouseLeftButtonDown += CloseMemoryTab_MouseDown;
         header.Children.Add(closeButton);
         return header;
+    }
+
+    private void RenameMemoryTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: TabItem tab } || !_memoryTabs.TryGetValue(tab, out var state))
+        {
+            return;
+        }
+
+        var newName = PromptMemoryTabName(state.DisplayName);
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            return;
+        }
+
+        state.DisplayName = newName.Trim();
+        tab.Header = CreateMemoryTabHeader(state, canClose: tab != Bios1Tab);
+        AppendLog($"Renamed tab to {state.DisplayName}");
+    }
+
+    private string? PromptMemoryTabName(string currentName)
+    {
+        var dialog = new Window
+        {
+            Title = "Rename tab",
+            Owner = this,
+            Width = 320,
+            Height = 130,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            Background = (Brush)FindResource("AppBackgroundBrush"),
+            Foreground = (Brush)FindResource("TextBrush")
+        };
+        var grid = new Grid { Margin = new Thickness(10) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var label = new TextBlock { Text = "Name", VerticalAlignment = VerticalAlignment.Center };
+        var nameBox = new TextBox { Text = currentName, Height = 24 };
+        Grid.SetColumn(nameBox, 1);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        Grid.SetRow(buttons, 1);
+        Grid.SetColumnSpan(buttons, 2);
+        var renameButton = new Button
+        {
+            Content = "Rename",
+            Width = 76,
+            Height = 26,
+            IsDefault = true,
+            Style = (Style)FindResource("ThemedButtonStyle")
+        };
+        renameButton.Click += (_, _) => dialog.DialogResult = true;
+        buttons.Children.Add(renameButton);
+
+        grid.Children.Add(label);
+        grid.Children.Add(nameBox);
+        grid.Children.Add(buttons);
+        dialog.Content = grid;
+        dialog.Loaded += (_, _) =>
+        {
+            nameBox.Focus();
+            nameBox.SelectAll();
+        };
+
+        return dialog.ShowDialog() == true ? nameBox.Text : null;
     }
 
     private void CloseMemoryTab_MouseDown(object sender, MouseButtonEventArgs e)
@@ -326,7 +414,7 @@ public partial class MainWindow : Window
         }
 
         var closedLabel = _memoryTabs.TryGetValue(tab, out var closingState)
-            ? MemoryTabLabel(closingState.Index)
+            ? MemoryTabDisplayName(closingState)
             : "Memory";
         var countBefore = MemoryTabControl.Items.Count;
         var closingActiveTab = _activeMemoryTab?.Tab == tab;
@@ -359,6 +447,9 @@ public partial class MainWindow : Window
     }
 
     private static string MemoryTabLabel(int index) => $"Memory {index}";
+
+    private static string MemoryTabDisplayName(MemoryTabState state) =>
+        string.IsNullOrWhiteSpace(state.DisplayName) ? MemoryTabLabel(state.Index) : state.DisplayName;
 
     private MemoryTabState CreateMemoryTabState(int index, TabItem tab)
     {
@@ -1024,7 +1115,7 @@ public partial class MainWindow : Window
     private IEnumerable<MemoryBufferOption> GetMemoryTabOptions() =>
         _memoryTabs.Values
             .OrderBy(tab => tab.Index)
-            .Select(tab => new MemoryBufferOption(MemoryTabLabel(tab.Index), tab.Buffer.ToArray(), tab.SourceFileName));
+            .Select(tab => new MemoryBufferOption(MemoryTabDisplayName(tab), tab.Buffer.ToArray(), tab.SourceFileName));
 
     private async Task ClearSingleBiosAsync(MemoryBufferOption memory, IReadOnlyList<string> meRegionPaths, IReadOnlyList<string> fitPaths, bool requiresFit, bool allowManualFallback, Action<string> log, CancellationToken cancellationToken)
     {
@@ -1044,7 +1135,7 @@ public partial class MainWindow : Window
 
             RebuildRows();
             UpdateStatus();
-            log($"Clear ME build completed: {memory.Label} -> {MemoryTabLabel(_activeMemoryTab?.Index ?? 0)} in {FormatDuration(stopwatch.Elapsed)}");
+            log($"Clear ME build completed: {memory.Label} -> {(_activeMemoryTab is null ? "Memory" : MemoryTabDisplayName(_activeMemoryTab))} in {FormatDuration(stopwatch.Elapsed)}");
             foreach (var line in result.Summary.Split(Environment.NewLine))
             {
                 log(line);
@@ -1079,7 +1170,7 @@ public partial class MainWindow : Window
             var tab1 = AddMemoryTabWithBuffer(first, ClearMeFileNameFor(memory1));
             var tab2 = AddMemoryTabWithBuffer(second, ClearMeFileNameFor(memory2));
             MemoryTabControl.SelectedItem = tab1;
-            log($"Clear ME dual build completed: {memory1.Label} + {memory2.Label} -> {MemoryTabLabel(_memoryTabs[tab1].Index)} + {MemoryTabLabel(_memoryTabs[tab2].Index)} in {FormatDuration(stopwatch.Elapsed)}");
+            log($"Clear ME dual build completed: {memory1.Label} + {memory2.Label} -> {MemoryTabDisplayName(_memoryTabs[tab1])} + {MemoryTabDisplayName(_memoryTabs[tab2])} in {FormatDuration(stopwatch.Elapsed)}");
             foreach (var line in result.Summary.Split(Environment.NewLine))
             {
                 log(line);
@@ -1165,7 +1256,7 @@ public partial class MainWindow : Window
         var sourceName = UniqueMemoryTabFileName(MergedBiosFileNameFor(merged.Length));
         var tab = AddMemoryTabWithBuffer(merged, sourceName);
         MemoryTabControl.SelectedItem = tab;
-        AppendLog($"Merge BIOS completed: {string.Join(" + ", selected.Select(memory => memory.Label))} -> {MemoryTabLabel(_memoryTabs[tab].Index)} ({FormatBytes(merged.Length)})");
+        AppendLog($"Merge BIOS completed: {string.Join(" + ", selected.Select(memory => memory.Label))} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({FormatBytes(merged.Length)})");
         SaveCurrentBufferWithDialog(sourceName);
     }
 
@@ -1178,7 +1269,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var currentMemoryLabel = _activeMemoryTab is null ? null : MemoryTabLabel(_activeMemoryTab.Index);
+        var currentMemoryLabel = _activeMemoryTab is null ? null : MemoryTabDisplayName(_activeMemoryTab);
         var dialog = new SplitBiosWindow(memories, currentMemoryLabel)
         {
             Owner = this
@@ -1199,7 +1290,7 @@ public partial class MainWindow : Window
         var fileName2 = UniqueMemoryTabFileName(SplitedBiosFileNameFor(second.Length));
         var tab2 = AddMemoryTabWithBuffer(second, fileName2);
         MemoryTabControl.SelectedItem = tab1;
-        AppendLog($"Split BIOS completed: {memory.Label} -> {MemoryTabLabel(_memoryTabs[tab1].Index)} ({FormatBytes(first.Length)}) + {MemoryTabLabel(_memoryTabs[tab2].Index)} ({FormatBytes(second.Length)})");
+        AppendLog($"Split BIOS completed: {memory.Label} -> {MemoryTabDisplayName(_memoryTabs[tab1])} ({FormatBytes(first.Length)}) + {MemoryTabDisplayName(_memoryTabs[tab2])} ({FormatBytes(second.Length)})");
         SaveCurrentBufferWithDialog(fileName1);
         MemoryTabControl.SelectedItem = tab2;
         SaveCurrentBufferWithDialog(fileName2);
@@ -1213,7 +1304,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var sourceLabel = MemoryTabLabel(_activeMemoryTab.Index);
+        var sourceLabel = MemoryTabDisplayName(_activeMemoryTab);
         var result = Unlock8Fc8Service.Unlock(_buffer);
         if (!result.Success)
         {
@@ -1225,7 +1316,7 @@ public partial class MainWindow : Window
         var fileName = UniqueMemoryTabFileName(Unlock8Fc8FileNameFor(_activeMemoryTab.SourceFileName));
         var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
         MemoryTabControl.SelectedItem = tab;
-        AppendLog($"Unlock DELL 8FC8 completed: {sourceLabel} -> {MemoryTabLabel(_memoryTabs[tab].Index)} ({result.PatchCount} patch(es), {FormatBytes(result.Bios.Length)})");
+        AppendLog($"Unlock DELL 8FC8 completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.PatchCount} patch(es), {FormatBytes(result.Bios.Length)})");
         SaveCurrentBufferWithDialog(fileName);
     }
 
@@ -1246,7 +1337,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var sourceLabel = MemoryTabLabel(_activeMemoryTab.Index);
+        var sourceLabel = MemoryTabDisplayName(_activeMemoryTab);
         var result = OemPasswordUnlockService.Unlock(_buffer, kind);
         if (!result.Success)
         {
@@ -1258,7 +1349,7 @@ public partial class MainWindow : Window
         var fileName = UniqueMemoryTabFileName(OemUnlockFileNameFor(_activeMemoryTab.SourceFileName, kind));
         var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
         MemoryTabControl.SelectedItem = tab;
-        AppendLog($"{title} completed: {sourceLabel} -> {MemoryTabLabel(_memoryTabs[tab].Index)} ({result.ClearedRanges.Count} region(s), {FormatBytes(result.Bios.Length)})");
+        AppendLog($"{title} completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.ClearedRanges.Count} region(s), {FormatBytes(result.Bios.Length)})");
         SaveCurrentBufferWithDialog(fileName);
     }
 
@@ -2567,7 +2658,7 @@ public partial class MainWindow : Window
         editor.SetBuffer(state.Buffer, OnHexCellChanged);
         RebuildRows();
         UpdateStatus();
-        AppendLog($"{MemoryTabLabel(state.Index)} buffer cleared to FF");
+        AppendLog($"{MemoryTabDisplayName(state)} buffer cleared to FF");
     }
 
     private void HexEditor_FillSelectionRequested(object? sender, EventArgs e)
@@ -2605,7 +2696,7 @@ public partial class MainWindow : Window
         UpdateStatus();
 
         var action = changed ? "filled" : "already matches";
-        AppendLog($"{MemoryTabLabel(state.Index)} selection {action}: 0x{start:X6}-0x{start + length - 1:X6} with {FormatHexPattern(dialog.FillPattern)}");
+        AppendLog($"{MemoryTabDisplayName(state)} selection {action}: 0x{start:X6}-0x{start + length - 1:X6} with {FormatHexPattern(dialog.FillPattern)}");
     }
 
     private void Fill00_Click(object sender, RoutedEventArgs e)
