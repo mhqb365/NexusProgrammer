@@ -639,6 +639,11 @@ public partial class MainWindow : Window
             });
 
             AppendLog($"Downloading update {result.DisplayLatestVersion}");
+            if (UpdateService.FindUpdateDownloadUrl(result.Release) is { } downloadUrl)
+            {
+                AppendLog($"Download URL: {downloadUrl}");
+            }
+
             var update = await UpdateService.DownloadAndPrepareUpdateAsync(result.Release, progress, cts.Token);
             AppendLog("Installing update");
             UpdateService.InstallPreparedUpdate(update);

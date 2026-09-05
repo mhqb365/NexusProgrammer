@@ -155,6 +155,9 @@ Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
         Application.Current.Shutdown();
     }
 
+    public static string? FindUpdateDownloadUrl(GitHubRelease release) =>
+        FindUpdateAsset(release)?.DownloadUrl;
+
     private static GitHubReleaseAsset? FindUpdateAsset(GitHubRelease release) =>
         release.Assets?.FirstOrDefault(asset =>
             !string.IsNullOrWhiteSpace(asset.DownloadUrl) &&
