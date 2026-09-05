@@ -63,6 +63,98 @@ public static class ProgrammerWorkflowService
         _ => "Programmer"
     };
 
+    public static string FormatId(byte[] id) => string.Join(" ", id.Select(x => x.ToString("X2")));
+
+    public static bool IsInvalidJedecId(byte[] id)
+    {
+        if (id.Length == 0)
+        {
+            return true;
+        }
+
+        if (id.All(value => value == 0x00) || id.All(value => value == 0xFF))
+        {
+            return true;
+        }
+
+        return id.Length >= 3 && id[0] == 0x03 && id[1] == 0x00 && id[2] == 0x00;
+    }
+
+    public static string FormatBytes(int bytes)
+    {
+        if (bytes >= 1024 * 1024)
+        {
+            return $"{bytes / (1024.0 * 1024.0):0.##} MB";
+        }
+
+        return bytes >= 1024 ? $"{bytes / 1024.0:0.##} KB" : $"{bytes} B";
+    }
+
+    public static string FormatDuration(TimeSpan elapsed)
+    {
+        if (elapsed.TotalHours >= 1)
+        {
+            return $"{(int)elapsed.TotalHours}h {elapsed.Minutes:D2}m {elapsed.Seconds:D2}.{elapsed.Milliseconds / 100}s";
+        }
+
+        if (elapsed.TotalMinutes >= 1)
+        {
+            return $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds:D2}.{elapsed.Milliseconds / 100}s";
+        }
+
+        return $"{elapsed.TotalSeconds:0.0}s";
+    }
+
+    public static string FormatSpeed(int bytes, TimeSpan elapsed)
+    {
+        if (elapsed.TotalSeconds <= 0)
+        {
+            return "n/a";
+        }
+
+        var bytesPerSecond = bytes / elapsed.TotalSeconds;
+        return bytesPerSecond >= 1024 * 1024
+            ? $"{bytesPerSecond / (1024 * 1024):0.##} MB/s"
+            : $"{bytesPerSecond / 1024:0.##} KB/s";
+    }
+
+    public static string FirstLogLine(string message) =>
+        message.Replace("\r", string.Empty)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? message;
+
+    public static bool Requires1V8Adapter(ChipProfile chip)
+    {
+        var volts = chip.Volts.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
+        return volts.Contains("1.8", StringComparison.OrdinalIgnoreCase) ||
+               volts.Contains("1V8", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool SameVoltageProfile(ChipProfile left, ChipProfile right) =>
+        string.Equals(NormalizeVoltage(left.Volts), NormalizeVoltage(right.Volts), StringComparison.OrdinalIgnoreCase);
+
+    public static bool ChipMatchesId(ChipProfile chip, byte[] id, IEnumerable<IcCandidate> catalog)
+    {
+        var idText = FormatId(id);
+        return catalog.Any(candidate =>
+            string.Equals(candidate.Profile.Name, chip.Name, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(candidate.JedecId, idText, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static int ParseStartAddress(string text)
+    {
+        text = text.Trim();
+        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[2..];
+        }
+
+        return int.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out var value) ? value : 0;
+    }
+
     private static ProgrammerSelection Connected(string key) =>
         new(key, $"{DisplayName(key)} connected", IsConnected: true);
+
+    private static string NormalizeVoltage(string volts) =>
+        volts.Replace(" ", "", StringComparison.OrdinalIgnoreCase).TrimEnd('V');
 }

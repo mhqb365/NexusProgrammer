@@ -759,7 +759,7 @@ public partial class MainWindow : Window
             AppendLog($"Detect request: reading JEDEC ID with {chip.Volts} probe profile");
             var id = await _programmer.ReadIdAsync(chip, progress, cancellationToken);
             AppendLog($"IC ID: {BitConverter.ToString(id).Replace("-", " ")}");
-            if (id.Length > 0 && !IsInvalidJedecId(id))
+            if (id.Length > 0 && !ProgrammerWorkflowService.IsInvalidJedecId(id))
             {
                 PlayOperationSound("Detect IC", success: true);
             }
@@ -776,7 +776,9 @@ public partial class MainWindow : Window
         }
 
         var detectedChip = CurrentChip();
-        if (detectedChip.Name == probeChip.Name || SameVoltageProfile(detectedChip, probeChip) || !CurrentChipMatchesId(detectedChip, detectedId))
+        if (detectedChip.Name == probeChip.Name ||
+            ProgrammerWorkflowService.SameVoltageProfile(detectedChip, probeChip) ||
+            !ProgrammerWorkflowService.ChipMatchesId(detectedChip, detectedId, _icCatalog))
         {
             return;
         }
@@ -2678,7 +2680,7 @@ public partial class MainWindow : Window
             return true;
         }
 
-        if (!Requires1V8Adapter(chip))
+        if (!ProgrammerWorkflowService.Requires1V8Adapter(chip))
         {
             return true;
         }
@@ -2698,27 +2700,6 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private static bool Requires1V8Adapter(ChipProfile chip)
-    {
-        var volts = chip.Volts.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
-        return volts.Contains("1.8", StringComparison.OrdinalIgnoreCase) ||
-               volts.Contains("1V8", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool SameVoltageProfile(ChipProfile left, ChipProfile right) =>
-        string.Equals(NormalizeVoltage(left.Volts), NormalizeVoltage(right.Volts), StringComparison.OrdinalIgnoreCase);
-
-    private static string NormalizeVoltage(string volts) =>
-        volts.Replace(" ", "", StringComparison.OrdinalIgnoreCase).TrimEnd('V');
-
-    private bool CurrentChipMatchesId(ChipProfile chip, byte[] id)
-    {
-        var idText = FormatId(id);
-        return _icCatalog.Any(candidate =>
-            string.Equals(candidate.Profile.Name, chip.Name, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(candidate.JedecId, idText, StringComparison.OrdinalIgnoreCase));
-    }
-
     private void ShowChipSelectionForId(byte[] id, bool autoApplySingle = false, bool openCatalogOnMiss = true)
     {
         if (id.Length == 0)
@@ -2727,8 +2708,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var idText = FormatId(id);
-        if (IsInvalidJedecId(id))
+        var idText = ProgrammerWorkflowService.FormatId(id);
+        if (ProgrammerWorkflowService.IsInvalidJedecId(id))
         {
             AppendLog($"Invalid IC ID {idText}. Check IC contact, orientation, pinout, adapter voltage, and clip wiring.");
             throw new LoggedOperationException();
@@ -2767,21 +2748,6 @@ public partial class MainWindow : Window
         }
 
         ShowChipSelection(candidates, "Search IC", idText);
-    }
-
-    private static bool IsInvalidJedecId(byte[] id)
-    {
-        if (id.Length == 0)
-        {
-            return true;
-        }
-
-        if (id.All(value => value == 0x00) || id.All(value => value == 0xFF))
-        {
-            return true;
-        }
-
-        return id.Length >= 3 && id[0] == 0x03 && id[1] == 0x00 && id[2] == 0x00;
     }
 
     private void AddIcFromJedecId(string jedecId)
@@ -2859,24 +2825,14 @@ public partial class MainWindow : Window
 
     private IEnumerable<IcCandidate> FindCandidatesByJedecId(byte[] id)
     {
-        var idText = FormatId(id);
+        var idText = ProgrammerWorkflowService.FormatId(id);
         return _icCatalog.Where(x => string.Equals(x.JedecId, idText, StringComparison.OrdinalIgnoreCase));
     }
-
-    private static string FormatId(byte[] id) => string.Join(" ", id.Select(x => x.ToString("X2")));
 
     private static string FormatMbits(int bytes) => IcCatalogLoader.FormatMbits(bytes);
 
     private int ParseStartAddress()
-    {
-        var text = StartAddressBox.Text.Trim();
-        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-        {
-            text = text[2..];
-        }
-
-        return int.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out var value) ? value : 0;
-    }
+        => ProgrammerWorkflowService.ParseStartAddress(StartAddressBox.Text);
 
     private void UpdateStatus()
     {
@@ -2922,48 +2878,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private static string FormatBytes(int bytes)
-    {
-        if (bytes >= 1024 * 1024)
-        {
-            return $"{bytes / (1024.0 * 1024.0):0.##} MB";
-        }
+    private static string FormatBytes(int bytes) => ProgrammerWorkflowService.FormatBytes(bytes);
 
-        return bytes >= 1024 ? $"{bytes / 1024.0:0.##} KB" : $"{bytes} B";
-    }
+    private static string FirstLogLine(string message) => ProgrammerWorkflowService.FirstLogLine(message);
 
-    private static string FirstLogLine(string message) =>
-        message.Replace("\r", string.Empty)
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .FirstOrDefault() ?? message;
+    private static string FormatDuration(TimeSpan elapsed) => ProgrammerWorkflowService.FormatDuration(elapsed);
 
-    private static string FormatDuration(TimeSpan elapsed)
-    {
-        if (elapsed.TotalHours >= 1)
-        {
-            return $"{(int)elapsed.TotalHours}h {elapsed.Minutes:D2}m {elapsed.Seconds:D2}.{elapsed.Milliseconds / 100}s";
-        }
-
-        if (elapsed.TotalMinutes >= 1)
-        {
-            return $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds:D2}.{elapsed.Milliseconds / 100}s";
-        }
-
-        return $"{elapsed.TotalSeconds:0.0}s";
-    }
-
-    private static string FormatSpeed(int bytes, TimeSpan elapsed)
-    {
-        if (elapsed.TotalSeconds <= 0)
-        {
-            return "n/a";
-        }
-
-        var bytesPerSecond = bytes / elapsed.TotalSeconds;
-        return bytesPerSecond >= 1024 * 1024
-            ? $"{bytesPerSecond / (1024 * 1024):0.##} MB/s"
-            : $"{bytesPerSecond / 1024:0.##} KB/s";
-    }
+    private static string FormatSpeed(int bytes, TimeSpan elapsed) => ProgrammerWorkflowService.FormatSpeed(bytes, elapsed);
 }
 
 

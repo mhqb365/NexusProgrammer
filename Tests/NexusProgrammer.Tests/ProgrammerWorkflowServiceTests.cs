@@ -55,4 +55,96 @@ public class ProgrammerWorkflowServiceTests
         Assert.Equal("XGecu T48 disconnected", selection.StatusText);
         Assert.False(selection.IsConnected);
     }
+
+    [Theory]
+    [InlineData(new byte[] { 0xEF, 0x40, 0x18 }, "EF 40 18")]
+    [InlineData(new byte[] { 0x00 }, "00")]
+    public void FormatIdUsesUppercaseHexPairs(byte[] id, string expected)
+    {
+        Assert.Equal(expected, ProgrammerWorkflowService.FormatId(id));
+    }
+
+    [Theory]
+    [InlineData(new byte[] { })]
+    [InlineData(new byte[] { 0x00, 0x00, 0x00 })]
+    [InlineData(new byte[] { 0xFF, 0xFF, 0xFF })]
+    [InlineData(new byte[] { 0x03, 0x00, 0x00 })]
+    public void IsInvalidJedecIdRejectsKnownBadIds(byte[] id)
+    {
+        Assert.True(ProgrammerWorkflowService.IsInvalidJedecId(id));
+    }
+
+    [Fact]
+    public void IsInvalidJedecIdAcceptsNonBlankId()
+    {
+        Assert.False(ProgrammerWorkflowService.IsInvalidJedecId([0xEF, 0x40, 0x18]));
+    }
+
+    [Theory]
+    [InlineData(512, "512 B")]
+    [InlineData(1024, "1 KB")]
+    [InlineData(1536, "1.5 KB")]
+    [InlineData(2 * 1024 * 1024, "2 MB")]
+    public void FormatBytesMatchesUiText(int bytes, string expected)
+    {
+        Assert.Equal(expected, ProgrammerWorkflowService.FormatBytes(bytes));
+    }
+
+    [Fact]
+    public void FormatSpeedUsesBytesAndElapsedTime()
+    {
+        Assert.Equal("2 MB/s", ProgrammerWorkflowService.FormatSpeed(4 * 1024 * 1024, TimeSpan.FromSeconds(2)));
+    }
+
+    [Theory]
+    [InlineData("1.8V", true)]
+    [InlineData("1 V8", true)]
+    [InlineData("3.3V", false)]
+    public void Requires1V8AdapterMatchesSupportedVoltageText(string volts, bool expected)
+    {
+        var chip = new ChipProfile("W25Q", "SPI_NOR", 1024, 256, "STD", Volts: volts);
+
+        Assert.Equal(expected, ProgrammerWorkflowService.Requires1V8Adapter(chip));
+    }
+
+    [Theory]
+    [InlineData("1.8 V", "1.8V", true)]
+    [InlineData("3.3V", "1.8V", false)]
+    public void SameVoltageProfileIgnoresSpacingAndTrailingV(string leftVolts, string rightVolts, bool expected)
+    {
+        var left = new ChipProfile("A", "SPI_NOR", 1024, 256, "STD", Volts: leftVolts);
+        var right = new ChipProfile("B", "SPI_NOR", 1024, 256, "STD", Volts: rightVolts);
+
+        Assert.Equal(expected, ProgrammerWorkflowService.SameVoltageProfile(left, right));
+    }
+
+    [Fact]
+    public void ChipMatchesIdRequiresSameProfileNameAndJedecId()
+    {
+        var chip = new ChipProfile("W25Q128", "SPI_NOR", 16 * 1024 * 1024, 256, "STD");
+        var catalog = new[]
+        {
+            Candidate("MX25L128", "EF 40 18"),
+            Candidate("W25Q128", "EF 40 18")
+        };
+
+        Assert.True(ProgrammerWorkflowService.ChipMatchesId(chip, [0xEF, 0x40, 0x18], catalog));
+        Assert.False(ProgrammerWorkflowService.ChipMatchesId(chip, [0xC2, 0x20, 0x18], catalog));
+    }
+
+    [Theory]
+    [InlineData("100", 0x100)]
+    [InlineData("0x100", 0x100)]
+    [InlineData("  00AF  ", 0xAF)]
+    [InlineData("not-hex", 0)]
+    public void ParseStartAddressUsesHexAndFallsBackToZero(string text, int expected)
+    {
+        Assert.Equal(expected, ProgrammerWorkflowService.ParseStartAddress(text));
+    }
+
+    private static IcCandidate Candidate(string name, string jedecId)
+    {
+        var profile = new ChipProfile(name, "SPI_NOR", 1024, 256, "STD");
+        return new IcCandidate(name, "3.3V", "8 Mbits", "256 Bytes", "GENERIC", "SPI_NOR", profile, jedecId);
+    }
 }
