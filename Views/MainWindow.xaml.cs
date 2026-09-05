@@ -973,7 +973,7 @@ public partial class MainWindow : Window
         });
         if (readCompleted)
         {
-            SaveCurrentBufferWithDialog();
+            await SaveCurrentBufferWithDialogAsync();
         }
     }
 
@@ -1143,9 +1143,9 @@ public partial class MainWindow : Window
             }
             log($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
             var suggestedFileName = ClearMeFileNameFor(memory);
-            var postClearOperation = Dispatcher.BeginInvoke(new Action(() =>
+            var postClearOperation = Dispatcher.BeginInvoke(new Action(async () =>
             {
-                SaveCurrentBufferWithDialog(suggestedFileName);
+                await SaveCurrentBufferWithDialogAsync(suggestedFileName);
             }));
         }, logCompletion: false, logger: log);
     }
@@ -1179,12 +1179,12 @@ public partial class MainWindow : Window
             log($"Clear ME completed in {FormatDuration(stopwatch.Elapsed)}");
             var fileName1 = ClearMeFileNameFor(memory1);
             var fileName2 = ClearMeFileNameFor(memory2);
-            var postClearOperation = Dispatcher.BeginInvoke(new Action(() =>
+            var postClearOperation = Dispatcher.BeginInvoke(new Action(async () =>
             {
                 MemoryTabControl.SelectedItem = tab1;
-                SaveCurrentBufferWithDialog(fileName1);
+                await SaveCurrentBufferWithDialogAsync(fileName1);
                 MemoryTabControl.SelectedItem = tab2;
-                SaveCurrentBufferWithDialog(fileName2);
+                await SaveCurrentBufferWithDialogAsync(fileName2);
             }));
         }, logCompletion: false, logger: log);
     }
@@ -1240,7 +1240,7 @@ public partial class MainWindow : Window
 
     private async void WindowsKeySearch_Click(object sender, RoutedEventArgs e) => await RunWindowsKeySearchAsync();
 
-    private void MergeBios_Click(object sender, RoutedEventArgs e)
+    private async void MergeBios_Click(object sender, RoutedEventArgs e)
     {
         var memories = GetMemoryTabOptions().ToList();
         if (memories.Count < 2)
@@ -1265,10 +1265,10 @@ public partial class MainWindow : Window
         var tab = AddMemoryTabWithBuffer(merged, sourceName);
         MemoryTabControl.SelectedItem = tab;
         AppendLog($"Merge BIOS completed: {string.Join(" + ", selected.Select(memory => memory.Label))} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({FormatBytes(merged.Length)})");
-        SaveCurrentBufferWithDialog(sourceName);
+        await SaveCurrentBufferWithDialogAsync(sourceName);
     }
 
-    private void SplitBios_Click(object sender, RoutedEventArgs e)
+    private async void SplitBios_Click(object sender, RoutedEventArgs e)
     {
         var memories = GetMemoryTabOptions().ToList();
         if (memories.Count == 0)
@@ -1299,12 +1299,12 @@ public partial class MainWindow : Window
         var tab2 = AddMemoryTabWithBuffer(second, fileName2);
         MemoryTabControl.SelectedItem = tab1;
         AppendLog($"Split BIOS completed: {memory.Label} -> {MemoryTabDisplayName(_memoryTabs[tab1])} ({FormatBytes(first.Length)}) + {MemoryTabDisplayName(_memoryTabs[tab2])} ({FormatBytes(second.Length)})");
-        SaveCurrentBufferWithDialog(fileName1);
+        await SaveCurrentBufferWithDialogAsync(fileName1);
         MemoryTabControl.SelectedItem = tab2;
-        SaveCurrentBufferWithDialog(fileName2);
+        await SaveCurrentBufferWithDialogAsync(fileName2);
     }
 
-    private void Unlock8Fc8_Click(object sender, RoutedEventArgs e)
+    private async void Unlock8Fc8_Click(object sender, RoutedEventArgs e)
     {
         if (_activeMemoryTab is null || _buffer.Length == 0)
         {
@@ -1325,19 +1325,19 @@ public partial class MainWindow : Window
         var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
         MemoryTabControl.SelectedItem = tab;
         AppendLog($"Unlock DELL 8FC8 completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.PatchCount} patch(es), {FormatBytes(result.Bios.Length)})");
-        SaveCurrentBufferWithDialog(fileName);
+        await SaveCurrentBufferWithDialogAsync(fileName);
     }
 
-    private void UnlockAcer_Click(object sender, RoutedEventArgs e) =>
-        UnlockOemPassword(OemPasswordUnlockKind.Acer, "Unlock ACER");
+    private async void UnlockAcer_Click(object sender, RoutedEventArgs e) =>
+        await UnlockOemPasswordAsync(OemPasswordUnlockKind.Acer, "Unlock ACER");
 
-    private void UnlockAsus_Click(object sender, RoutedEventArgs e) =>
-        UnlockOemPassword(OemPasswordUnlockKind.Asus, "Unlock ASUS");
+    private async void UnlockAsus_Click(object sender, RoutedEventArgs e) =>
+        await UnlockOemPasswordAsync(OemPasswordUnlockKind.Asus, "Unlock ASUS");
 
-    private void UnlockHp_Click(object sender, RoutedEventArgs e) =>
-        UnlockOemPassword(OemPasswordUnlockKind.Hp, "Unlock HP");
+    private async void UnlockHp_Click(object sender, RoutedEventArgs e) =>
+        await UnlockOemPasswordAsync(OemPasswordUnlockKind.Hp, "Unlock HP");
 
-    private void UnlockOemPassword(OemPasswordUnlockKind kind, string title)
+    private async Task UnlockOemPasswordAsync(OemPasswordUnlockKind kind, string title)
     {
         if (_activeMemoryTab is null || _buffer.Length == 0)
         {
@@ -1358,7 +1358,7 @@ public partial class MainWindow : Window
         var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
         MemoryTabControl.SelectedItem = tab;
         AppendLog($"{title} completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.ClearedRanges.Count} region(s), {FormatBytes(result.Bios.Length)})");
-        SaveCurrentBufferWithDialog(fileName);
+        await SaveCurrentBufferWithDialogAsync(fileName);
     }
 
     private void WindowsKeyMenuButton_Click(object sender, RoutedEventArgs e)
@@ -2454,9 +2454,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private Task LoadBufferFromFileAsync(string fileName)
+    private async Task LoadBufferFromFileAsync(string fileName)
     {
-        var originalBytes = File.ReadAllBytes(fileName);
+        var originalBytes = await LargeFileIo.ReadAllBytesAsync(fileName);
         var buffer = TrimBiosMetadata(originalBytes, out var trimReason, out var removedBytes);
         SetActiveBuffer(buffer);
         if (_activeMemoryTab is not null)
@@ -2475,15 +2475,14 @@ public partial class MainWindow : Window
             AppendLog($"Input file have {trimReason}. Trimmed {FormatBytes(removedBytes)}: {FormatBytes(originalBytes.Length)} -> {FormatBytes(_buffer.Length)}");
         }
 
-        return Task.CompletedTask;
     }
 
-    private void SaveFile_Click(object sender, RoutedEventArgs e)
+    private async void SaveFile_Click(object sender, RoutedEventArgs e)
     {
-        SaveCurrentBufferWithDialog();
+        await SaveCurrentBufferWithDialogAsync();
     }
 
-    private void SaveCurrentBufferWithDialog(string? suggestedFileName = null)
+    private async Task SaveCurrentBufferWithDialogAsync(string? suggestedFileName = null)
     {
         var initialDirectory = SuggestedInitialDirectory();
         var fileName = suggestedFileName ?? SuggestedSaveFileName();
@@ -2498,7 +2497,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        File.WriteAllBytes(dialog.FileName, _buffer);
+        await LargeFileIo.WriteAllBytesAsync(dialog.FileName, _buffer);
         if (_activeMemoryTab is not null)
         {
             _activeMemoryTab.SourceFileName = dialog.FileName;
@@ -2861,7 +2860,7 @@ public partial class MainWindow : Window
         });
         if (saveAfterScript)
         {
-            SaveCurrentBufferWithDialog();
+            await SaveCurrentBufferWithDialogAsync();
         }
     }
 

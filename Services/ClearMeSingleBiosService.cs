@@ -53,7 +53,8 @@ internal static class ClearMeSingleBiosService
             }
 
             log?.Invoke($"Clear ME legacy ME 1-10: replacing ME region manually with {Path.GetFileName(legacyMeRegionPath)}");
-            return ReplaceMeRegionManually(bios, legacyMeRegionPath, log) with
+            var legacyResult = await ReplaceMeRegionManuallyAsync(bios, legacyMeRegionPath, log, cancellationToken);
+            return legacyResult with
             {
                 Summary =
                     $"ME Region used: {Path.GetFileName(legacyMeRegionPath)}{Environment.NewLine}" +
@@ -138,7 +139,8 @@ internal static class ClearMeSingleBiosService
             try
             {
                 log?.Invoke($"Clear ME FIT fallback failed; replacing ME region manually with first candidate: {Path.GetFileName(manualMeRegionPath)}");
-                return ReplaceMeRegionManually(bios, manualMeRegionPath, log) with
+                var manualResult = await ReplaceMeRegionManuallyAsync(bios, manualMeRegionPath, log, cancellationToken);
+                return manualResult with
                 {
                     Summary =
                         $"ME Region used: {Path.GetFileName(manualMeRegionPath)}{Environment.NewLine}" +
@@ -172,8 +174,8 @@ internal static class ClearMeSingleBiosService
         var inputPath = Path.Combine(tempRoot, "input_original.bin");
         var meRegionCopy = Path.Combine(tempRoot, "ME Region.bin");
         var outputPath = Path.Combine(tempRoot, "outimage.bin");
-        await File.WriteAllBytesAsync(inputPath, bios, cancellationToken);
-        File.Copy(meRegionPath, meRegionCopy, overwrite: true);
+        await LargeFileIo.WriteAllBytesAsync(inputPath, bios, cancellationToken);
+        await LargeFileIo.CopyAsync(meRegionPath, meRegionCopy, overwrite: true, cancellationToken);
 
         try
         {
@@ -194,7 +196,7 @@ internal static class ClearMeSingleBiosService
             if (build.ExitCode != 0 && failedFileSystem is not null)
             {
                 log?.Invoke($"Clear ME FIT failed to initialize {failedFileSystem}; replacing ME region before FIT retry");
-                var repairedInput = CreateMeFileSystemRepairedInput(inputPath, meRegionCopy, tempRoot, log);
+                var repairedInput = await CreateMeFileSystemRepairedInputAsync(inputPath, meRegionCopy, tempRoot, log, cancellationToken);
                 log?.Invoke($"Clear ME repair input: ME offset 0x{repairedInput.Region.Offset:X}, size {repairedInput.Region.Size} bytes");
                 log?.Invoke($"Clear ME FIT retry after ME replacement: {Path.GetFileName(fitPath)}");
 
@@ -229,7 +231,7 @@ internal static class ClearMeSingleBiosService
                 else
                 {
                     log?.Invoke($"Clear ME FIT retry after ME replacement failed: {Path.GetFileName(fitPath)} - {FirstLine(SummarizeFitError(retry.Output))}");
-                    var repairedImage = await File.ReadAllBytesAsync(repairedInput.Path, cancellationToken);
+                    var repairedImage = await LargeFileIo.ReadAllBytesAsync(repairedInput.Path, cancellationToken);
                     var fallback = new ClearMeResult(
                         repairedImage,
                         string.Join(Environment.NewLine,
@@ -251,7 +253,7 @@ internal static class ClearMeSingleBiosService
                 throw new InvalidOperationException("FIT completed but no output image was found.");
             }
 
-            var builtImage = await File.ReadAllBytesAsync(builtPath, cancellationToken);
+            var builtImage = await LargeFileIo.ReadAllBytesAsync(builtPath, cancellationToken);
             if (builtImage.Length != bios.Length)
             {
                 throw new InvalidOperationException(
@@ -347,10 +349,10 @@ internal static class ClearMeSingleBiosService
         document.Save(outputPath);
     }
 
-    private static RepairedInput CreateMeFileSystemRepairedInput(string inputPath, string meRegionPath, string workingDirectory, Action<string>? log)
+    private static async Task<RepairedInput> CreateMeFileSystemRepairedInputAsync(string inputPath, string meRegionPath, string workingDirectory, Action<string>? log, CancellationToken cancellationToken)
     {
-        var data = File.ReadAllBytes(inputPath);
-        var meRegion = File.ReadAllBytes(meRegionPath);
+        var data = await LargeFileIo.ReadAllBytesAsync(inputPath, cancellationToken);
+        var meRegion = await LargeFileIo.ReadAllBytesAsync(meRegionPath, cancellationToken);
         var region = IntelFlashDescriptorRegion(data, 2, "ME");
         if (region.Offset + meRegion.Length > data.Length)
         {
@@ -367,14 +369,14 @@ internal static class ClearMeSingleBiosService
         Buffer.BlockCopy(meRegion, 0, data, region.Offset, meRegion.Length);
 
         var repairedPath = Path.Combine(workingDirectory, "input_me_fs_repaired.bin");
-        File.WriteAllBytes(repairedPath, data);
+        await LargeFileIo.WriteAllBytesAsync(repairedPath, data, cancellationToken);
         return new RepairedInput(repairedPath, region);
     }
 
-    private static ClearMeResult ReplaceMeRegionManually(byte[] bios, string meRegionPath, Action<string>? log)
+    private static async Task<ClearMeResult> ReplaceMeRegionManuallyAsync(byte[] bios, string meRegionPath, Action<string>? log, CancellationToken cancellationToken)
     {
         var data = bios.ToArray();
-        var meRegion = File.ReadAllBytes(meRegionPath);
+        var meRegion = await LargeFileIo.ReadAllBytesAsync(meRegionPath, cancellationToken);
         var region = IntelFlashDescriptorRegion(data, 2, "ME");
         if (region.Offset + meRegion.Length > data.Length)
         {
