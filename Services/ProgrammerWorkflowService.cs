@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace NexusProgrammer;
 
 public sealed record ProgrammerSelection(string Key, string StatusText, bool IsConnected)
@@ -12,6 +14,8 @@ public sealed record ProgrammerSelection(string Key, string StatusText, bool IsC
         _ => new MockProgrammer()
     };
 }
+
+public sealed record ProgrammerScriptResult(bool SaveAfterScript);
 
 public static class ProgrammerWorkflowService
 {
@@ -208,6 +212,29 @@ public static class ProgrammerWorkflowService
         await programmer.EraseAsync(chip, progress, cancellationToken);
     }
 
+    public static async Task<ProgrammerScriptResult> RunScriptAsync(
+        string script,
+        IChipProgrammer programmer,
+        ChipProfile chip,
+        byte[] buffer,
+        int startAddress,
+        bool skipBlankPages,
+        bool unprotectFirst,
+        IProgress<int> progress,
+        Action<string> log,
+        Action<byte[]> applyReadBuffer,
+        CancellationToken cancellationToken)
+    {
+        if (string.Equals(script, "Read + verify", StringComparison.OrdinalIgnoreCase))
+        {
+            await RunReadVerifyScriptAsync(programmer, chip, buffer.Length, startAddress, progress, log, applyReadBuffer, cancellationToken);
+            return new ProgrammerScriptResult(SaveAfterScript: true);
+        }
+
+        await RunEraseWriteVerifyScriptAsync(programmer, chip, buffer, startAddress, skipBlankPages, unprotectFirst, progress, log, cancellationToken);
+        return new ProgrammerScriptResult(SaveAfterScript: false);
+    }
+
     private static ProgrammerSelection Connected(string key) =>
         new(key, $"{DisplayName(key)} connected", IsConnected: true);
 
@@ -230,5 +257,136 @@ public static class ProgrammerWorkflowService
         log($"Unprotect request: {chip.Name}");
         await programmer.UnprotectAsync(chip, progress, cancellationToken);
         log("Unprotect completed");
+    }
+
+    private static async Task RunReadVerifyScriptAsync(
+        IChipProgrammer programmer,
+        ChipProfile chip,
+        int length,
+        int startAddress,
+        IProgress<int> progress,
+        Action<string> log,
+        Action<byte[]> applyReadBuffer,
+        CancellationToken cancellationToken)
+    {
+        log($"Script request: read and verify {FormatBytes(length)} from 0x{startAddress:X6}");
+        log("Script stage: read started");
+        TimeSpan readElapsed;
+        TimeSpan verifyElapsed;
+        bool readOk;
+        byte[] readBuffer;
+        if (programmer is RT809HSDKProgrammer rt809hProgrammer)
+        {
+            var result = await rt809hProgrammer.ReadAndVerifyAsync(
+                chip,
+                startAddress,
+                length,
+                progress,
+                progress,
+                (data, elapsed) =>
+                {
+                    readBuffer = data;
+                    applyReadBuffer(data);
+                    readElapsed = elapsed;
+                    log($"Script stage: read completed: {FormatBytes(data.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(data.Length, readElapsed)})");
+                },
+                () => log("Script stage: verify started"),
+                cancellationToken);
+            readElapsed = result.ReadElapsed;
+            verifyElapsed = result.VerifyElapsed;
+            readOk = result.Verified;
+        }
+        else
+        {
+            var stageWatch = Stopwatch.StartNew();
+            readBuffer = await programmer.ReadAsync(chip, startAddress, length, progress, cancellationToken);
+            stageWatch.Stop();
+            readElapsed = stageWatch.Elapsed;
+            applyReadBuffer(readBuffer);
+            log($"Script stage: read completed: {FormatBytes(readBuffer.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(readBuffer.Length, readElapsed)})");
+            log("Script stage: verify started");
+            stageWatch.Restart();
+            readOk = await programmer.VerifyAsync(chip, startAddress, readBuffer, progress, cancellationToken);
+            stageWatch.Stop();
+            verifyElapsed = stageWatch.Elapsed;
+        }
+
+        log(readOk
+            ? $"Script stage: verify completed OK: {FormatBytes(length)} in {FormatDuration(verifyElapsed)} ({FormatSpeed(length, verifyElapsed)})"
+            : $"Script stage: verify failed: {FormatBytes(length)} in {FormatDuration(verifyElapsed)} ({FormatSpeed(length, verifyElapsed)})");
+        log(readOk ? "Script completed: read + verify OK" : "Script completed: read + verify failed");
+    }
+
+    private static async Task RunEraseWriteVerifyScriptAsync(
+        IChipProgrammer programmer,
+        ChipProfile chip,
+        byte[] buffer,
+        int startAddress,
+        bool skipBlankPages,
+        bool unprotectFirst,
+        IProgress<int> progress,
+        Action<string> log,
+        CancellationToken cancellationToken)
+    {
+        log($"Script request: erase, write and verify {FormatBytes(buffer.Length)} at 0x{startAddress:X6}");
+        await UnprotectIfRequestedAsync(programmer, chip, unprotectFirst, progress, log, cancellationToken);
+        log("Script stage: erase started");
+        TimeSpan eraseElapsed;
+        TimeSpan writeElapsed;
+        TimeSpan finalVerifyElapsed;
+        bool ok;
+        if (programmer is RT809HSDKProgrammer rt809hWriter)
+        {
+            var result = await rt809hWriter.EraseWriteVerifyAsync(
+                chip,
+                startAddress,
+                buffer,
+                skipBlankPages,
+                progress,
+                progress,
+                progress,
+                elapsed =>
+                {
+                    eraseElapsed = elapsed;
+                    log($"Script stage: erase completed in {FormatDuration(eraseElapsed)}");
+                },
+                () => log("Script stage: write started"),
+                elapsed =>
+                {
+                    writeElapsed = elapsed;
+                    log($"Script stage: write completed: {FormatBytes(buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(buffer.Length, writeElapsed)})");
+                },
+                () => log("Script stage: verify started"),
+                cancellationToken);
+            eraseElapsed = result.EraseElapsed;
+            writeElapsed = result.WriteElapsed;
+            finalVerifyElapsed = result.VerifyElapsed;
+            ok = result.Verified;
+        }
+        else
+        {
+            var eraseWriteVerifyWatch = Stopwatch.StartNew();
+            await programmer.EraseAsync(chip, progress, cancellationToken);
+            eraseWriteVerifyWatch.Stop();
+            eraseElapsed = eraseWriteVerifyWatch.Elapsed;
+            log($"Script stage: erase completed in {FormatDuration(eraseElapsed)}");
+            await UnprotectIfRequestedAsync(programmer, chip, unprotectFirst, progress, log, cancellationToken);
+            log("Script stage: write started");
+            eraseWriteVerifyWatch.Restart();
+            await programmer.WriteAsync(chip, startAddress, buffer, progress, skipBlankPages, cancellationToken);
+            eraseWriteVerifyWatch.Stop();
+            writeElapsed = eraseWriteVerifyWatch.Elapsed;
+            log($"Script stage: write completed: {FormatBytes(buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(buffer.Length, writeElapsed)})");
+            log("Script stage: verify started");
+            eraseWriteVerifyWatch.Restart();
+            ok = await programmer.VerifyAsync(chip, startAddress, buffer, progress, cancellationToken);
+            eraseWriteVerifyWatch.Stop();
+            finalVerifyElapsed = eraseWriteVerifyWatch.Elapsed;
+        }
+
+        log(ok
+            ? $"Script stage: verify completed OK: {FormatBytes(buffer.Length)} in {FormatDuration(finalVerifyElapsed)} ({FormatSpeed(buffer.Length, finalVerifyElapsed)})"
+            : $"Script stage: verify failed: {FormatBytes(buffer.Length)} in {FormatDuration(finalVerifyElapsed)} ({FormatSpeed(buffer.Length, finalVerifyElapsed)})");
+        log(ok ? "Script completed: verify OK" : "Script completed: verify failed");
     }
 }

@@ -2346,126 +2346,30 @@ public partial class MainWindow : Window
             return;
         }
 
-        var saveAfterScript = false;
+        ProgrammerScriptResult? scriptResult = null;
         await RunOperationAsync(script, null, async (progress, cancellationToken) =>
         {
             var startAddress = ParseStartAddress();
-            if (isReadVerifyScript)
-            {
-                AppendLog($"Script request: read and verify {FormatBytes(_buffer.Length)} from 0x{startAddress:X6}");
-                AppendLog("Script stage: read started");
-                TimeSpan readElapsed;
-                TimeSpan verifyElapsed;
-                bool readOk;
-                if (_programmer is RT809HSDKProgrammer rt809hProgrammer)
+            var skipBlankPages = SkipBlankPagesCheckBox.IsChecked == true;
+            scriptResult = await ProgrammerWorkflowService.RunScriptAsync(
+                script,
+                _programmer,
+                chip,
+                _buffer,
+                startAddress,
+                skipBlankPages,
+                UnprotectChipCheckBox.IsChecked == true,
+                progress,
+                AppendLog,
+                data =>
                 {
-                    var result = await rt809hProgrammer.ReadAndVerifyAsync(
-                        chip,
-                        startAddress,
-                        _buffer.Length,
-                        progress,
-                        progress,
-                        (data, elapsed) =>
-                        {
-                            SetActiveBuffer(data);
-                            readElapsed = elapsed;
-                            AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(_buffer.Length, readElapsed)})");
-                            RebuildRows();
-                            UpdateStatus();
-                        },
-                        () => AppendLog("Script stage: verify started"),
-                        cancellationToken);
-                    readElapsed = result.ReadElapsed;
-                    verifyElapsed = result.VerifyElapsed;
-                    readOk = result.Verified;
-                }
-                else
-                {
-                    var stageWatch = Stopwatch.StartNew();
-                    SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress, cancellationToken));
-                    stageWatch.Stop();
-                    readElapsed = stageWatch.Elapsed;
-                    AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(_buffer.Length, readElapsed)})");
+                    SetActiveBuffer(data);
                     RebuildRows();
                     UpdateStatus();
-                    AppendLog("Script stage: verify started");
-                    stageWatch.Restart();
-                    readOk = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress, cancellationToken);
-                    stageWatch.Stop();
-                    verifyElapsed = stageWatch.Elapsed;
-                }
-
-                AppendLog(readOk
-                    ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(verifyElapsed)} ({FormatSpeed(_buffer.Length, verifyElapsed)})"
-                    : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(verifyElapsed)} ({FormatSpeed(_buffer.Length, verifyElapsed)})");
-                AppendLog(readOk ? "Script completed: read + verify OK" : "Script completed: read + verify failed");
-                saveAfterScript = true;
-                return;
-            }
-
-            var skipBlankPages = SkipBlankPagesCheckBox.IsChecked == true;
-            AppendLog($"Script request: erase, write and verify {FormatBytes(_buffer.Length)} at 0x{startAddress:X6}");
-            await UnprotectIfRequestedAsync(chip, progress, cancellationToken);
-            AppendLog("Script stage: erase started");
-            TimeSpan eraseElapsed;
-            TimeSpan writeElapsed;
-            TimeSpan finalVerifyElapsed;
-            bool ok;
-            if (_programmer is RT809HSDKProgrammer rt809hWriter)
-            {
-                var result = await rt809hWriter.EraseWriteVerifyAsync(
-                    chip,
-                    startAddress,
-                    _buffer,
-                    skipBlankPages,
-                    progress,
-                    progress,
-                    progress,
-                    elapsed =>
-                    {
-                        eraseElapsed = elapsed;
-                        AppendLog($"Script stage: erase completed in {FormatDuration(eraseElapsed)}");
-                    },
-                    () => AppendLog("Script stage: write started"),
-                    elapsed =>
-                    {
-                        writeElapsed = elapsed;
-                        AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(_buffer.Length, writeElapsed)})");
-                    },
-                    () => AppendLog("Script stage: verify started"),
-                    cancellationToken);
-                eraseElapsed = result.EraseElapsed;
-                writeElapsed = result.WriteElapsed;
-                finalVerifyElapsed = result.VerifyElapsed;
-                ok = result.Verified;
-            }
-            else
-            {
-                var eraseWriteVerifyWatch = Stopwatch.StartNew();
-                await _programmer.EraseAsync(chip, progress, cancellationToken);
-                eraseWriteVerifyWatch.Stop();
-                eraseElapsed = eraseWriteVerifyWatch.Elapsed;
-                AppendLog($"Script stage: erase completed in {FormatDuration(eraseElapsed)}");
-                await UnprotectIfRequestedAsync(chip, progress, cancellationToken);
-                AppendLog("Script stage: write started");
-                eraseWriteVerifyWatch.Restart();
-                await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages, cancellationToken);
-                eraseWriteVerifyWatch.Stop();
-                writeElapsed = eraseWriteVerifyWatch.Elapsed;
-                AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(_buffer.Length, writeElapsed)})");
-                AppendLog("Script stage: verify started");
-                eraseWriteVerifyWatch.Restart();
-                ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress, cancellationToken);
-                eraseWriteVerifyWatch.Stop();
-                finalVerifyElapsed = eraseWriteVerifyWatch.Elapsed;
-            }
-
-            AppendLog(ok
-                ? $"Script stage: verify completed OK: {FormatBytes(_buffer.Length)} in {FormatDuration(finalVerifyElapsed)} ({FormatSpeed(_buffer.Length, finalVerifyElapsed)})"
-                : $"Script stage: verify failed: {FormatBytes(_buffer.Length)} in {FormatDuration(finalVerifyElapsed)} ({FormatSpeed(_buffer.Length, finalVerifyElapsed)})");
-            AppendLog(ok ? "Script completed: verify OK" : "Script completed: verify failed");
+                },
+                cancellationToken);
         });
-        if (saveAfterScript)
+        if (scriptResult?.SaveAfterScript == true)
         {
             await SaveCurrentBufferWithDialogAsync();
         }

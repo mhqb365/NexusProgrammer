@@ -187,6 +187,8 @@ Verification:
 - Full test + build app.
 - Manual smoke test voi CH341/CH347/T48/RT809 neu co thiet bi.
 
+Status: [OK]
+
 ## Nguyen tac khi lam
 
 - Moi phase la mot commit rieng.

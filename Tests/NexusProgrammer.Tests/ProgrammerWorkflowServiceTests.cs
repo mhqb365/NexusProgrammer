@@ -202,6 +202,58 @@ public class ProgrammerWorkflowServiceTests
         Assert.Equal(["Unprotect request: W25Q", "Unprotect completed"], log);
     }
 
+    [Fact]
+    public async Task RunReadVerifyScriptReadsAppliesBufferAndVerifiesReadData()
+    {
+        var programmer = new RecordingProgrammer { ReadData = [0x12, 0x34] };
+        var chip = new ChipProfile("W25Q", "SPI_NOR", 2, 256, "STD");
+        var log = new List<string>();
+        byte[]? applied = null;
+
+        var result = await ProgrammerWorkflowService.RunScriptAsync(
+            "Read + verify",
+            programmer,
+            chip,
+            [0xFF, 0xFF],
+            0x50,
+            skipBlankPages: false,
+            unprotectFirst: false,
+            new Progress<int>(),
+            log.Add,
+            data => applied = data,
+            CancellationToken.None);
+
+        Assert.True(result.SaveAfterScript);
+        Assert.Equal([0x12, 0x34], applied);
+        Assert.Equal(["Read:50:2", "Verify:50:2"], programmer.Calls);
+        Assert.Contains("Script completed: read + verify OK", log);
+    }
+
+    [Fact]
+    public async Task RunEraseWriteVerifyScriptRunsStagesInOrder()
+    {
+        var programmer = new RecordingProgrammer();
+        var chip = new ChipProfile("W25Q", "SPI_NOR", 2, 256, "STD");
+        var log = new List<string>();
+
+        var result = await ProgrammerWorkflowService.RunScriptAsync(
+            "Erase + write + verify",
+            programmer,
+            chip,
+            [0xAA, 0xBB],
+            0x60,
+            skipBlankPages: true,
+            unprotectFirst: true,
+            new Progress<int>(),
+            log.Add,
+            _ => { },
+            CancellationToken.None);
+
+        Assert.False(result.SaveAfterScript);
+        Assert.Equal(["Unprotect", "Erase", "Unprotect", "Write:60:2:True", "Verify:60:2"], programmer.Calls);
+        Assert.Contains("Script completed: verify OK", log);
+    }
+
     private static IcCandidate Candidate(string name, string jedecId)
     {
         var profile = new ChipProfile(name, "SPI_NOR", 1024, 256, "STD");
