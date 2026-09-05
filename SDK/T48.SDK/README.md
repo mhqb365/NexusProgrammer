@@ -59,8 +59,7 @@ The SDK uses this GUID to enumerate and open the programmer.
 - Close `Xgpro.exe`, Wireshark, and `dumpcap.exe` before using the SDK. They can
   hold the USB device and cause `Access is denied`.
 
-The SDK has no external NuGet dependencies. `NuGet.config` clears package
-sources so local builds do not require network access.
+The SDK has no external NuGet dependencies.
 
 ## Project Layout
 
@@ -341,8 +340,6 @@ For early testing, use a sacrificial chip and always keep a readback backup.
 Issues and pull requests are welcome. Please include the T48 driver version,
 chip model, JEDEC ID, command used, and whether the workflow touched destructive
 operations.
-
-See `CONTRIBUTING.md` for development notes.
 
 ## License
 
