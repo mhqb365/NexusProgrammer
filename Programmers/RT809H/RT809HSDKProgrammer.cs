@@ -9,16 +9,18 @@ public sealed class RT809HSDKProgrammer : IChipProgrammer
 
     public static bool CanOpenDevice() => Rt809hDevice.IsConnected();
 
-    public Task<bool> DetectAsync(IProgress<int> progress) => Task.Run(() =>
+    public Task<bool> DetectAsync(IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         progress.Report(10);
         using var device = Rt809hDevice.Open();
         progress.Report(100);
         return true;
-    });
+    }, cancellationToken);
 
-    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(() =>
+    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSpi25(chip);
         using var device = Rt809hDevice.Open(Uses1V8Profile(chip));
         progress.Report(50);
@@ -30,13 +32,13 @@ public sealed class RT809HSDKProgrammer : IChipProgrammer
 
         progress.Report(100);
         return new[] { id.Manufacturer, id.MemoryType, id.CapacityCode };
-    });
+    }, cancellationToken);
 
-    public async Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress)
+    public async Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress, CancellationToken cancellationToken = default)
     {
         EnsureSupported(chip, startAddress, length);
         await using var device = Rt809hDevice.Open(Uses1V8Profile(chip));
-        return await device.ReadAsync((uint)startAddress, length, progress);
+        return await device.ReadAsync((uint)startAddress, length, progress, cancellationToken);
     }
 
     public async Task<RT809HReadVerifyResult> ReadAndVerifyAsync(
@@ -46,29 +48,30 @@ public sealed class RT809HSDKProgrammer : IChipProgrammer
         IProgress<int> readProgress,
         IProgress<int> verifyProgress,
         Action<byte[], TimeSpan>? readCompleted = null,
-        Action? verifyStarted = null)
+        Action? verifyStarted = null,
+        CancellationToken cancellationToken = default)
     {
         EnsureSupported(chip, startAddress, length);
         await using var device = Rt809hDevice.Open(Uses1V8Profile(chip));
 
         var readWatch = System.Diagnostics.Stopwatch.StartNew();
-        var data = await device.ReadAsync((uint)startAddress, length, readProgress);
+        var data = await device.ReadAsync((uint)startAddress, length, readProgress, cancellationToken);
         readWatch.Stop();
         readCompleted?.Invoke(data, readWatch.Elapsed);
 
         verifyStarted?.Invoke();
         var verifyWatch = System.Diagnostics.Stopwatch.StartNew();
-        var verified = await VerifyOpenDeviceAsync(device, (uint)startAddress, data, verifyProgress);
+        var verified = await VerifyOpenDeviceAsync(device, (uint)startAddress, data, verifyProgress, cancellationToken);
         verifyWatch.Stop();
 
         return new RT809HReadVerifyResult(data, verified, readWatch.Elapsed, verifyWatch.Elapsed);
     }
 
-    public async Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false)
+    public async Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false, CancellationToken cancellationToken = default)
     {
         EnsureSupported(chip, startAddress, data.Length);
         await using var device = Rt809hDevice.Open(Uses1V8Profile(chip));
-        await device.ProgramAsync((uint)startAddress, data, skipBlankPages, progress);
+        await device.ProgramAsync((uint)startAddress, data, skipBlankPages, progress, cancellationToken);
     }
 
     public async Task<RT809HEraseWriteVerifyResult> EraseWriteVerifyAsync(
@@ -82,37 +85,38 @@ public sealed class RT809HSDKProgrammer : IChipProgrammer
         Action<TimeSpan>? eraseCompleted = null,
         Action? writeStarted = null,
         Action<TimeSpan>? writeCompleted = null,
-        Action? verifyStarted = null)
+        Action? verifyStarted = null,
+        CancellationToken cancellationToken = default)
     {
         EnsureSupported(chip, startAddress, data.Length);
         await using var device = Rt809hDevice.Open(Uses1V8Profile(chip));
 
         var eraseWatch = System.Diagnostics.Stopwatch.StartNew();
-        await device.EraseAsync(EstimateEraseTimeout(chip), eraseProgress);
+        await device.EraseAsync(EstimateEraseTimeout(chip), eraseProgress, cancellationToken);
         eraseWatch.Stop();
         eraseCompleted?.Invoke(eraseWatch.Elapsed);
 
         writeStarted?.Invoke();
         var writeWatch = System.Diagnostics.Stopwatch.StartNew();
-        await device.ProgramAsync((uint)startAddress, data, skipBlankPages, writeProgress);
+        await device.ProgramAsync((uint)startAddress, data, skipBlankPages, writeProgress, cancellationToken);
         writeWatch.Stop();
         writeCompleted?.Invoke(writeWatch.Elapsed);
 
         verifyStarted?.Invoke();
         var verifyWatch = System.Diagnostics.Stopwatch.StartNew();
-        var verified = await VerifyOpenDeviceAsync(device, (uint)startAddress, data, verifyProgress);
+        var verified = await VerifyOpenDeviceAsync(device, (uint)startAddress, data, verifyProgress, cancellationToken);
         verifyWatch.Stop();
 
         return new RT809HEraseWriteVerifyResult(verified, eraseWatch.Elapsed, writeWatch.Elapsed, verifyWatch.Elapsed);
     }
 
-    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress)
+    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, CancellationToken cancellationToken = default)
     {
         EnsureSupported(chip, startAddress, data.Length);
         await using var device = Rt809hDevice.Open(Uses1V8Profile(chip));
         try
         {
-            await device.VerifyAsync((uint)startAddress, data, progress);
+            await device.VerifyAsync((uint)startAddress, data, progress, cancellationToken);
             return true;
         }
         catch (RT809H.SDK.RT809HException ex) when (ex.Status == 6)
@@ -121,11 +125,11 @@ public sealed class RT809HSDKProgrammer : IChipProgrammer
         }
     }
 
-    private static async Task<bool> VerifyOpenDeviceAsync(Rt809hDevice device, uint startAddress, byte[] data, IProgress<int> progress)
+    private static async Task<bool> VerifyOpenDeviceAsync(Rt809hDevice device, uint startAddress, byte[] data, IProgress<int> progress, CancellationToken cancellationToken)
     {
         try
         {
-            await device.VerifyAsync(startAddress, data, progress);
+            await device.VerifyAsync(startAddress, data, progress, cancellationToken);
             return true;
         }
         catch (RT809H.SDK.RT809HException ex) when (ex.Status == 6)
@@ -134,18 +138,19 @@ public sealed class RT809HSDKProgrammer : IChipProgrammer
         }
     }
 
-    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress)
+    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSpi25(chip);
         progress.Report(100);
         return Task.CompletedTask;
     }
 
-    public async Task EraseAsync(ChipProfile chip, IProgress<int> progress)
+    public async Task EraseAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default)
     {
         EnsureSupported(chip, 0, chip.SizeBytes);
         await using var device = Rt809hDevice.Open(Uses1V8Profile(chip));
-        await device.EraseAsync(EstimateEraseTimeout(chip), progress);
+        await device.EraseAsync(EstimateEraseTimeout(chip), progress, cancellationToken);
     }
 
     private static void EnsureSupported(ChipProfile chip, int startAddress, int length)

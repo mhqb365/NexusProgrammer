@@ -23,27 +23,31 @@ public sealed class T48SDKProgrammer : IChipProgrammer
         }
     }
 
-    public Task<bool> DetectAsync(IProgress<int> progress) => Task.Run(() =>
+    public Task<bool> DetectAsync(IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         progress.Report(10);
         using var device = T48UsbDevice.OpenFirst();
         progress.Report(100);
         return true;
-    });
+    }, cancellationToken);
 
-    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(() =>
+    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSpi25(chip);
         using var device = T48UsbDevice.OpenFirst();
         var spi25 = new T48Spi25Client(device);
         progress.Report(50);
         var id = ReadValidJedecId(spi25, Uses1V8Profile(chip));
+        cancellationToken.ThrowIfCancellationRequested();
         progress.Report(100);
         return new[] { id.ManufacturerId, id.MemoryType, id.CapacityCode };
-    });
+    }, cancellationToken);
 
-    public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress) => Task.Run(() =>
+    public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSpi25(chip);
         using var device = T48UsbDevice.OpenFirst();
         var spi25 = new T48Spi25Client(device);
@@ -54,12 +58,14 @@ public sealed class T48SDKProgrammer : IChipProgrammer
             throw new IOException($"XGecu T48 SDK returned {data.Length} byte(s), expected {length} byte(s).");
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         progress.Report(100);
         return data;
-    });
+    }, cancellationToken);
 
-    public Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false) => Task.Run(() =>
+    public Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSpi25(chip);
         if (startAddress % WritePageSize != 0)
         {
@@ -77,32 +83,36 @@ public sealed class T48SDKProgrammer : IChipProgrammer
         else
         {
             RunT48Operation(() => spi25.WriteFlash((uint)startAddress, padded, ToSdkProgress(progress), UsesLargeFlashProfile(chip), Uses1V8Profile(chip)));
+            cancellationToken.ThrowIfCancellationRequested();
             progress.Report(100);
         }
-    });
+    }, cancellationToken);
 
-    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress)
+    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, CancellationToken cancellationToken = default)
     {
-        var actual = await ReadAsync(chip, startAddress, data.Length, progress);
+        var actual = await ReadAsync(chip, startAddress, data.Length, progress, cancellationToken);
         return actual.SequenceEqual(data);
     }
 
-    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress)
+    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSpi25(chip);
         progress.Report(100);
         return Task.CompletedTask;
     }
 
-    public Task EraseAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(() =>
+    public Task EraseAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSpi25(chip);
         using var device = T48UsbDevice.OpenFirst();
         var spi25 = new T48Spi25Client(device);
         progress.Report(5);
         RunT48Operation(() => spi25.EraseChip(ToSdkProgress(progress), EstimateEraseDuration(chip), UsesLargeFlashProfile(chip), Uses1V8Profile(chip)));
+        cancellationToken.ThrowIfCancellationRequested();
         progress.Report(100);
-    });
+    }, cancellationToken);
 
     private static T48Spi25DeviceId ReadValidJedecId(T48Spi25Client spi25, bool use1V8Profile)
     {

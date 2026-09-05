@@ -33,10 +33,11 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         return true;
     }
 
-    public async Task<bool> DetectAsync(IProgress<int> progress)
+    public async Task<bool> DetectAsync(IProgress<int> progress, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         progress.Report(10);
-        await Task.Yield();
+        await Task.Delay(1, cancellationToken);
         var handle = NativeMethods.CH347OpenDevice(DeviceIndex);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
@@ -56,8 +57,9 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         }
     }
 
-    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(() =>
+    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             progress.Report(100);
@@ -69,6 +71,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         byte[] id = [];
         for (var attempt = 1; attempt <= ReadIdMaxAttempts; attempt++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Some CH347 driver/firmware combinations return an idle bus on the
             // first session after connecting. Reopen and reinitialize SPI for
             // each retry so the retry follows the same path as a second click.
@@ -91,14 +94,15 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
         progress.Report(100);
         return id;
-    });
+    }, cancellationToken);
 
-    public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress) => Task.Run(() =>
+    public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             using var device = OpenDevice();
-            return ReadI2cEeprom(chip, startAddress, length, progress);
+            return ReadI2cEeprom(chip, startAddress, length, progress, cancellationToken);
         }
 
         EnsureSpi(chip);
@@ -108,6 +112,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
         while (done < length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var count = Math.Min(ReadChunkSize, length - done);
             var address = startAddress + done;
             var addressBytes = Uses4ByteAddress(chip, address) ? 4 : 3;
@@ -122,14 +127,15 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
         progress.Report(100);
         return result;
-    });
+    }, cancellationToken);
 
-    public Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false) => Task.Run(async () =>
+    public Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false, CancellationToken cancellationToken = default) => Task.Run(async () =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             using var device = OpenDevice();
-            await WriteI2cEepromAsync(chip, startAddress, data, progress, skipBlankPages);
+            await WriteI2cEepromAsync(chip, startAddress, data, progress, skipBlankPages, cancellationToken);
             return;
         }
 
@@ -140,6 +146,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
         while (done < data.Length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var pageOffset = (startAddress + done) % chip.PageSize;
             var count = Math.Min(chip.PageSize - pageOffset, data.Length - done);
             if (skipBlankPages && IsBlank(data, done, count))
@@ -158,23 +165,24 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             WriteAddress(command, 0, 0x02, 0x12, address, addressBytes);
             Buffer.BlockCopy(data, done, command, headerLength, count);
             SpiTransfer(command);
-            await WaitUntilReadyAsync();
+            await WaitUntilReadyAsync(cancellationToken);
 
             done += count;
             ReportProgress(progress, data.Length, done, ref lastProgress);
         }
 
         progress.Report(100);
-    });
+    }, cancellationToken);
 
-    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress)
+    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, CancellationToken cancellationToken = default)
     {
-        var actual = await ReadAsync(chip, startAddress, data.Length, progress);
+        var actual = await ReadAsync(chip, startAddress, data.Length, progress, cancellationToken);
         return actual.SequenceEqual(data);
     }
 
-    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(async () =>
+    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(async () =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             throw new NotSupportedException("I2C EEPROM does not use SPI NOR block-protect status bits.");
@@ -182,16 +190,17 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
         EnsureSpi(chip);
         using var spiDevice = OpenDevice();
-        await ClearSpiNorProtectionAsync(progress);
-    });
+        await ClearSpiNorProtectionAsync(progress, cancellationToken);
+    }, cancellationToken);
 
-    public Task EraseAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(async () =>
+    public Task EraseAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(async () =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             using var device = OpenDevice();
             var blank = Enumerable.Repeat((byte)0xFF, chip.SizeBytes).ToArray();
-            await WriteI2cEepromAsync(chip, 0, blank, progress, skipBlankPages: false);
+            await WriteI2cEepromAsync(chip, 0, blank, progress, skipBlankPages: false, cancellationToken);
             return;
         }
 
@@ -203,6 +212,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
         for (var i = 0; i < 600; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!IsBusy())
             {
                 progress.Report(100);
@@ -210,11 +220,11 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             }
 
             progress.Report(Math.Min(95, 5 + i / 7));
-            await Task.Delay(100);
+            await Task.Delay(100, cancellationToken);
         }
 
         throw new TimeoutException("Erase timeout. Chip still reports WIP=1.");
-    });
+    }, cancellationToken);
 
     private static Ch347Device OpenDevice()
     {
@@ -274,12 +284,13 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         return result;
     }
 
-    private static byte[] ReadI2cEeprom(ChipProfile chip, int startAddress, int length, IProgress<int> progress)
+    private static byte[] ReadI2cEeprom(ChipProfile chip, int startAddress, int length, IProgress<int> progress, CancellationToken cancellationToken)
     {
         var result = new byte[length];
         var done = 0;
         while (done < length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var count = Math.Min(I2cReadChunkSize, length - done);
             var address = startAddress + done;
             var write = BuildI2cAddressWriteBuffer(chip, address);
@@ -299,12 +310,13 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         return result;
     }
 
-    private static async Task WriteI2cEepromAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages)
+    private static async Task WriteI2cEepromAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages, CancellationToken cancellationToken)
     {
         var done = 0;
         var lastProgress = -1;
         while (done < data.Length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var address = startAddress + done;
             var pageOffset = address % chip.PageSize;
             var count = Math.Min(chip.PageSize - pageOffset, data.Length - done);
@@ -324,7 +336,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
             done += count;
             ReportProgress(progress, data.Length, done, ref lastProgress);
-            await Task.Delay(6);
+            await Task.Delay(6, cancellationToken);
         }
 
         progress.Report(100);
@@ -393,8 +405,9 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
     private static byte ReadStatus(byte command) => SpiTransfer([command, 0x00])[1];
 
-    private static async Task ClearSpiNorProtectionAsync(IProgress<int> progress)
+    private static async Task ClearSpiNorProtectionAsync(IProgress<int> progress, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sr1 = ReadStatus(0x05);
         var sr2 = ReadStatus(0x35);
         progress.Report(20);
@@ -409,15 +422,16 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
         WriteEnable();
         SpiTransfer([0x01, nextSr1, nextSr2]);
-        await WaitUntilReadyAsync();
+        await WaitUntilReadyAsync(cancellationToken);
         progress.Report(100);
     }
 
-    private static Task WaitUntilReadyAsync()
+    private static Task WaitUntilReadyAsync(CancellationToken cancellationToken)
     {
         var timeoutAt = Environment.TickCount64 + WriteReadyTimeoutMs;
         while (Environment.TickCount64 < timeoutAt)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!IsBusy())
             {
                 return Task.CompletedTask;
@@ -574,10 +588,11 @@ public sealed class ChNativeProgrammer : IChipProgrammer
         return true;
     }
 
-    public async Task<bool> DetectAsync(IProgress<int> progress)
+    public async Task<bool> DetectAsync(IProgress<int> progress, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         progress.Report(10);
-        await Task.Yield();
+        await Task.Delay(1, cancellationToken);
         var handle = NativeMethods.CHOpenDevice(DeviceIndex);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
@@ -597,8 +612,9 @@ public sealed class ChNativeProgrammer : IChipProgrammer
         }
     }
 
-    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(() =>
+    public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             progress.Report(100);
@@ -611,14 +627,15 @@ public sealed class ChNativeProgrammer : IChipProgrammer
         var id = SpiTransfer([0x9F, 0x00, 0x00, 0x00]);
         progress.Report(100);
         return id.Skip(1).Take(3).ToArray();
-    });
+    }, cancellationToken);
 
-    public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress) => Task.Run(() =>
+    public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             using var i2cDevice = OpenDevice();
-            return ReadI2cEeprom(chip, startAddress, length, progress);
+            return ReadI2cEeprom(chip, startAddress, length, progress, cancellationToken);
         }
 
         EnsureSpi(chip);
@@ -628,6 +645,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
         while (done < length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var count = Math.Min(ReadChunkSize, length - done);
             var address = startAddress + done;
             var addressBytes = Uses4ByteAddress(chip, address) ? 4 : 3;
@@ -641,14 +659,15 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
         progress.Report(100);
         return result;
-    });
+    }, cancellationToken);
 
-    public Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false) => Task.Run(async () =>
+    public Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false, CancellationToken cancellationToken = default) => Task.Run(async () =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             using var i2cDevice = OpenDevice();
-            await WriteI2cEepromAsync(chip, startAddress, data, progress, skipBlankPages);
+            await WriteI2cEepromAsync(chip, startAddress, data, progress, skipBlankPages, cancellationToken);
             return;
         }
 
@@ -658,6 +677,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
         while (done < data.Length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var pageOffset = (startAddress + done) % chip.PageSize;
             var count = Math.Min(chip.PageSize - pageOffset, data.Length - done);
             if (skipBlankPages && IsBlank(data, done, count))
@@ -676,23 +696,24 @@ public sealed class ChNativeProgrammer : IChipProgrammer
             WriteAddress(command, 0, 0x02, 0x12, address, addressBytes);
             Buffer.BlockCopy(data, done, command, headerLength, count);
             SpiTransfer(command);
-            await WaitUntilReadyAsync();
+            await WaitUntilReadyAsync(cancellationToken);
 
             done += count;
             progress.Report(ProgressPercent(done, data.Length));
         }
 
         progress.Report(100);
-    });
+    }, cancellationToken);
 
-    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress)
+    public async Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, CancellationToken cancellationToken = default)
     {
-        var actual = await ReadAsync(chip, startAddress, data.Length, progress);
+        var actual = await ReadAsync(chip, startAddress, data.Length, progress, cancellationToken);
         return actual.SequenceEqual(data);
     }
 
-    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(async () =>
+    public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(async () =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             throw new NotSupportedException("I2C EEPROM does not use SPI NOR block-protect status bits.");
@@ -700,16 +721,17 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
         EnsureSpi(chip);
         using var spiDevice = OpenDevice();
-        await ClearSpiNorProtectionAsync(progress);
-    });
+        await ClearSpiNorProtectionAsync(progress, cancellationToken);
+    }, cancellationToken);
 
-    public Task EraseAsync(ChipProfile chip, IProgress<int> progress) => Task.Run(async () =>
+    public Task EraseAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.Run(async () =>
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsI2c(chip))
         {
             using var i2cDevice = OpenDevice();
             var blank = Enumerable.Repeat((byte)0xFF, chip.SizeBytes).ToArray();
-            await WriteI2cEepromAsync(chip, 0, blank, progress, skipBlankPages: false);
+            await WriteI2cEepromAsync(chip, 0, blank, progress, skipBlankPages: false, cancellationToken);
             return;
         }
 
@@ -721,6 +743,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
         for (var i = 0; i < 600; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!IsBusy())
             {
                 progress.Report(100);
@@ -728,11 +751,11 @@ public sealed class ChNativeProgrammer : IChipProgrammer
             }
 
             progress.Report(Math.Min(95, 5 + i / 7));
-            await Task.Delay(100);
+            await Task.Delay(100, cancellationToken);
         }
 
         throw new TimeoutException("Erase timeout. Chip still reports WIP=1.");
-    });
+    }, cancellationToken);
 
     private static ChDevice OpenDevice()
     {
@@ -765,12 +788,13 @@ public sealed class ChNativeProgrammer : IChipProgrammer
         return io;
     }
 
-    private static byte[] ReadI2cEeprom(ChipProfile chip, int startAddress, int length, IProgress<int> progress)
+    private static byte[] ReadI2cEeprom(ChipProfile chip, int startAddress, int length, IProgress<int> progress, CancellationToken cancellationToken)
     {
         var result = new byte[length];
         var done = 0;
         while (done < length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var count = Math.Min(I2cReadChunkSize, length - done);
             var address = startAddress + done;
             var write = BuildI2cAddressWriteBuffer(chip, address);
@@ -790,11 +814,12 @@ public sealed class ChNativeProgrammer : IChipProgrammer
         return result;
     }
 
-    private static async Task WriteI2cEepromAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages)
+    private static async Task WriteI2cEepromAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages, CancellationToken cancellationToken)
     {
         var done = 0;
         while (done < data.Length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var address = startAddress + done;
             var pageOffset = address % chip.PageSize;
             var count = Math.Min(chip.PageSize - pageOffset, data.Length - done);
@@ -814,7 +839,7 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
             done += count;
             progress.Report(ProgressPercent(done, data.Length));
-            await Task.Delay(8);
+            await Task.Delay(8, cancellationToken);
         }
 
         progress.Report(100);
@@ -871,8 +896,9 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
     private static byte ReadStatus(byte command) => SpiTransfer([command, 0x00])[1];
 
-    private static async Task ClearSpiNorProtectionAsync(IProgress<int> progress)
+    private static async Task ClearSpiNorProtectionAsync(IProgress<int> progress, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sr1 = ReadStatus(0x05);
         var sr2 = ReadStatus(0x35);
         progress.Report(20);
@@ -887,20 +913,21 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
         WriteEnable();
         SpiTransfer([0x01, nextSr1, nextSr2]);
-        await WaitUntilReadyAsync();
+        await WaitUntilReadyAsync(cancellationToken);
         progress.Report(100);
     }
 
-    private static async Task WaitUntilReadyAsync()
+    private static async Task WaitUntilReadyAsync(CancellationToken cancellationToken)
     {
         for (var i = 0; i < 500; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!IsBusy())
             {
                 return;
             }
 
-            await Task.Delay(PageProgramDelayMs);
+            await Task.Delay(PageProgramDelayMs, cancellationToken);
         }
 
         throw new TimeoutException("Write timeout. Chip still reports WIP=1.");

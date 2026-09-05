@@ -44,10 +44,13 @@
   <ItemGroup>
     <Compile Remove="T48\**\*.cs" />
     <Compile Remove="SDK\**\*.cs" />
+    <Compile Remove="Tests\**\*.cs" />
     <Compile Remove="tmp\**\*.cs" />
     <Page Remove="SDK\**\*.xaml" />
+    <Page Remove="Tests\**\*.xaml" />
     <Page Remove="tmp\**\*.xaml" />
     <ApplicationDefinition Remove="SDK\**\*.xaml" />
+    <ApplicationDefinition Remove="Tests\**\*.xaml" />
     <ApplicationDefinition Remove="tmp\**\*.xaml" />
   </ItemGroup>
 
