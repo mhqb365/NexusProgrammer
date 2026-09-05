@@ -1,6 +1,6 @@
 namespace NexusProgrammer;
 
-internal enum OemPasswordUnlockKind
+public enum OemPasswordUnlockKind
 {
     Acer,
     Asus,

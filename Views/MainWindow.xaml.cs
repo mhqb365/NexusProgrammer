@@ -1224,7 +1224,7 @@ public partial class MainWindow : Window
 
         var selected = new[] { dialog.Bios1!, dialog.Bios2! };
         var merged = BiosBufferService.MergeMemoryBuffers(selected);
-        var sourceName = UniqueMemoryTabFileName(MergedBiosFileNameFor(merged.Length));
+        var sourceName = UniqueMemoryTabFileName(BiosToolService.MergedBiosFileNameFor(merged.Length));
         var tab = AddMemoryTabWithBuffer(merged, sourceName);
         MemoryTabControl.SelectedItem = tab;
         AppendLog($"Merge BIOS completed: {string.Join(" + ", selected.Select(memory => memory.Label))} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({FormatBytes(merged.Length)})");
@@ -1254,11 +1254,10 @@ public partial class MainWindow : Window
         var memory = dialog.Bios!;
         var firstLength = dialog.File1Length;
         var secondLength = dialog.File2Length;
-        var first = memory.Buffer[..firstLength].ToArray();
-        var second = memory.Buffer[firstLength..(firstLength + secondLength)].ToArray();
-        var fileName1 = UniqueMemoryTabFileName(SplitedBiosFileNameFor(first.Length));
+        var (first, second) = BiosToolService.SplitBios(memory.Buffer, firstLength, secondLength);
+        var fileName1 = UniqueMemoryTabFileName(BiosToolService.SplitedBiosFileNameFor(first.Length));
         var tab1 = AddMemoryTabWithBuffer(first, fileName1);
-        var fileName2 = UniqueMemoryTabFileName(SplitedBiosFileNameFor(second.Length));
+        var fileName2 = UniqueMemoryTabFileName(BiosToolService.SplitedBiosFileNameFor(second.Length));
         var tab2 = AddMemoryTabWithBuffer(second, fileName2);
         MemoryTabControl.SelectedItem = tab1;
         AppendLog($"Split BIOS completed: {memory.Label} -> {MemoryTabDisplayName(_memoryTabs[tab1])} ({FormatBytes(first.Length)}) + {MemoryTabDisplayName(_memoryTabs[tab2])} ({FormatBytes(second.Length)})");
@@ -1284,7 +1283,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var fileName = UniqueMemoryTabFileName(Unlock8Fc8FileNameFor(_activeMemoryTab.SourceFileName));
+        var fileName = UniqueMemoryTabFileName(BiosToolService.Unlock8Fc8FileNameFor(_activeMemoryTab.SourceFileName));
         var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
         MemoryTabControl.SelectedItem = tab;
         AppendLog($"Unlock DELL 8FC8 completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.PatchCount} patch(es), {FormatBytes(result.Bios.Length)})");
@@ -1317,7 +1316,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var fileName = UniqueMemoryTabFileName(OemUnlockFileNameFor(_activeMemoryTab.SourceFileName, kind));
+        var fileName = UniqueMemoryTabFileName(BiosToolService.OemUnlockFileNameFor(_activeMemoryTab.SourceFileName, kind));
         var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
         MemoryTabControl.SelectedItem = tab;
         AppendLog($"{title} completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.ClearedRanges.Count} region(s), {FormatBytes(result.Bios.Length)})");
@@ -2259,58 +2258,9 @@ public partial class MainWindow : Window
         return BiosBufferService.UniqueFileName(directory, fileName, usedNames);
     }
 
-    private static string MergedBiosFileNameFor(int bytes) =>
-        $"{FormatBinaryMegabytes(bytes)}_MERGED.bin";
-
-    private static string SplitedBiosFileNameFor(int bytes) =>
-        $"{FormatBinaryMegabytes(bytes)}_SPLITED.bin";
-
-    private static string Unlock8Fc8FileNameFor(string sourceFileName)
-    {
-        var source = string.IsNullOrWhiteSpace(sourceFileName)
-            ? "BIOS"
-            : Path.GetFileNameWithoutExtension(sourceFileName);
-        return $"{SafeFileStem(source)}_8FC8_UNLOCKED.bin";
-    }
-
-    private static string OemUnlockFileNameFor(string sourceFileName, OemPasswordUnlockKind kind)
-    {
-        var source = string.IsNullOrWhiteSpace(sourceFileName)
-            ? "BIOS"
-            : Path.GetFileNameWithoutExtension(sourceFileName);
-        return $"{SafeFileStem(source)}_{kind.ToString().ToUpperInvariant()}_UNLOCK.bin";
-    }
-
-    private static string FormatBinaryMegabytes(int bytes)
-    {
-        const int mib = 1024 * 1024;
-        if (bytes % mib == 0)
-        {
-            return $"{bytes / mib}MB";
-        }
-
-        return $"{bytes / (double)mib:0.##}MB";
-    }
-
     private string ClearMeFileNameFor(MemoryBufferOption memory)
     {
-        var source = string.IsNullOrWhiteSpace(memory.SourceFileName)
-            ? CurrentChip().Name
-            : Path.GetFileNameWithoutExtension(memory.SourceFileName);
-        return $"{SafeFileStem(source)}_CLEARME.bin";
-    }
-
-    private static string SafeFileStem(string value)
-    {
-        var invalidChars = Path.GetInvalidFileNameChars().ToHashSet();
-        var builder = new StringBuilder(value.Length);
-        foreach (var character in value)
-        {
-            builder.Append(invalidChars.Contains(character) ? '_' : character);
-        }
-
-        var stem = builder.ToString().Trim();
-        return string.IsNullOrWhiteSpace(stem) ? "BIOS" : stem;
+        return BiosToolService.ClearMeFileNameFor(memory, CurrentChip().Name);
     }
 
     private void SaveLog_Click(object sender, RoutedEventArgs e)

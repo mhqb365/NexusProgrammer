@@ -171,6 +171,8 @@ Verification:
 - Manual smoke test cac dialog lien quan neu co UI.
 - Full test + build app.
 
+Status: [OK]
+
 ### Phase 4: Programmer workflow
 
 Deliverable:
