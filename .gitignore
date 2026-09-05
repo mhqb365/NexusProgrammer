@@ -1,9 +1,13 @@
 # Build output
-bin/
-obj/
+[Bb]in/
+[Oo]bj/
+[Tt]mp/
+artifacts/
+publish/
 
 # Visual Studio / Rider
 .vs/
+.vscode/
 .idea/
 *.user
 *.suo
@@ -12,7 +16,17 @@ obj/
 
 # NuGet
 *.nupkg
+*.snupkg
 packages/
+
+# Logs, test, and coverage output
+*.log
+*.binlog
+*.trx
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
 
 # OS noise
 Thumbs.db
@@ -27,9 +41,8 @@ AGENTS.md
 AGENTS_CODEX.md
 GEMINI.md
 
-__CHECK__
+__CHECK__/
 help
 docs
-tmp
 
 design/
