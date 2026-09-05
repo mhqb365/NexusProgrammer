@@ -152,9 +152,83 @@ public static class ProgrammerWorkflowService
         return int.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out var value) ? value : 0;
     }
 
+    public static async Task<byte[]> ReadChipAsync(
+        IChipProgrammer programmer,
+        ChipProfile chip,
+        int startAddress,
+        int length,
+        IProgress<int> progress,
+        Action<string> log,
+        CancellationToken cancellationToken)
+    {
+        log($"Read request: {FormatBytes(length)} from 0x{startAddress:X6}");
+        return await programmer.ReadAsync(chip, startAddress, length, progress, cancellationToken);
+    }
+
+    public static async Task WriteChipAsync(
+        IChipProgrammer programmer,
+        ChipProfile chip,
+        int startAddress,
+        byte[] buffer,
+        bool skipBlankPages,
+        bool unprotectFirst,
+        IProgress<int> progress,
+        Action<string> log,
+        CancellationToken cancellationToken)
+    {
+        log($"Write request: {FormatBytes(buffer.Length)} to 0x{startAddress:X6}{(skipBlankPages ? " (skip FF pages)" : "")}, voltage profile {chip.Volts}");
+        await UnprotectIfRequestedAsync(programmer, chip, unprotectFirst, progress, log, cancellationToken);
+        await programmer.WriteAsync(chip, startAddress, buffer, progress, skipBlankPages, cancellationToken);
+    }
+
+    public static async Task<bool> VerifyChipAsync(
+        IChipProgrammer programmer,
+        ChipProfile chip,
+        int startAddress,
+        byte[] buffer,
+        IProgress<int> progress,
+        Action<string> log,
+        CancellationToken cancellationToken)
+    {
+        log($"Verify request: {FormatBytes(buffer.Length)} at 0x{startAddress:X6}");
+        var ok = await programmer.VerifyAsync(chip, startAddress, buffer, progress, cancellationToken);
+        log(ok ? "Verify OK" : "Verify failed");
+        return ok;
+    }
+
+    public static async Task EraseChipAsync(
+        IChipProgrammer programmer,
+        ChipProfile chip,
+        bool unprotectFirst,
+        IProgress<int> progress,
+        Action<string> log,
+        CancellationToken cancellationToken)
+    {
+        await UnprotectIfRequestedAsync(programmer, chip, unprotectFirst, progress, log, cancellationToken);
+        await programmer.EraseAsync(chip, progress, cancellationToken);
+    }
+
     private static ProgrammerSelection Connected(string key) =>
         new(key, $"{DisplayName(key)} connected", IsConnected: true);
 
     private static string NormalizeVoltage(string volts) =>
         volts.Replace(" ", "", StringComparison.OrdinalIgnoreCase).TrimEnd('V');
+
+    private static async Task UnprotectIfRequestedAsync(
+        IChipProgrammer programmer,
+        ChipProfile chip,
+        bool unprotectFirst,
+        IProgress<int> progress,
+        Action<string> log,
+        CancellationToken cancellationToken)
+    {
+        if (!unprotectFirst)
+        {
+            return;
+        }
+
+        log($"Unprotect request: {chip.Name}");
+        await programmer.UnprotectAsync(chip, progress, cancellationToken);
+        log("Unprotect completed");
+    }
 }

@@ -142,9 +142,111 @@ public class ProgrammerWorkflowServiceTests
         Assert.Equal(expected, ProgrammerWorkflowService.ParseStartAddress(text));
     }
 
+    [Fact]
+    public async Task ReadChipAsyncLogsRequestAndReturnsReadData()
+    {
+        var programmer = new RecordingProgrammer();
+        programmer.ReadData = [0x12, 0x34];
+        var chip = new ChipProfile("W25Q", "SPI_NOR", 2, 256, "STD");
+        var log = new List<string>();
+
+        var data = await ProgrammerWorkflowService.ReadChipAsync(programmer, chip, 0x20, 2, new Progress<int>(), log.Add, CancellationToken.None);
+
+        Assert.Equal([0x12, 0x34], data);
+        Assert.Equal(["Read request: 2 B from 0x000020"], log);
+        Assert.Contains("Read:20:2", programmer.Calls);
+    }
+
+    [Fact]
+    public async Task WriteChipAsyncCanUnprotectBeforeWrite()
+    {
+        var programmer = new RecordingProgrammer();
+        var chip = new ChipProfile("W25Q", "SPI_NOR", 2, 256, "STD", Volts: "3.3V");
+        var log = new List<string>();
+
+        await ProgrammerWorkflowService.WriteChipAsync(programmer, chip, 0x30, [0xAA, 0xBB], skipBlankPages: true, unprotectFirst: true, new Progress<int>(), log.Add, CancellationToken.None);
+
+        Assert.Equal(["Unprotect", "Write:30:2:True"], programmer.Calls);
+        Assert.Equal(
+            [
+                "Write request: 2 B to 0x000030 (skip FF pages), voltage profile 3.3V",
+                "Unprotect request: W25Q",
+                "Unprotect completed"
+            ],
+            log);
+    }
+
+    [Fact]
+    public async Task VerifyChipAsyncLogsResult()
+    {
+        var programmer = new RecordingProgrammer { VerifyResult = false };
+        var chip = new ChipProfile("W25Q", "SPI_NOR", 2, 256, "STD");
+        var log = new List<string>();
+
+        var ok = await ProgrammerWorkflowService.VerifyChipAsync(programmer, chip, 0x40, [0xAA, 0xBB], new Progress<int>(), log.Add, CancellationToken.None);
+
+        Assert.False(ok);
+        Assert.Equal(["Verify request: 2 B at 0x000040", "Verify failed"], log);
+    }
+
+    [Fact]
+    public async Task EraseChipAsyncCanUnprotectBeforeErase()
+    {
+        var programmer = new RecordingProgrammer();
+        var chip = new ChipProfile("W25Q", "SPI_NOR", 2, 256, "STD");
+        var log = new List<string>();
+
+        await ProgrammerWorkflowService.EraseChipAsync(programmer, chip, unprotectFirst: true, new Progress<int>(), log.Add, CancellationToken.None);
+
+        Assert.Equal(["Unprotect", "Erase"], programmer.Calls);
+        Assert.Equal(["Unprotect request: W25Q", "Unprotect completed"], log);
+    }
+
     private static IcCandidate Candidate(string name, string jedecId)
     {
         var profile = new ChipProfile(name, "SPI_NOR", 1024, 256, "STD");
         return new IcCandidate(name, "3.3V", "8 Mbits", "256 Bytes", "GENERIC", "SPI_NOR", profile, jedecId);
+    }
+
+    private sealed class RecordingProgrammer : IChipProgrammer
+    {
+        public string Name => "Recording";
+        public List<string> Calls { get; } = [];
+        public byte[] ReadData { get; set; } = [];
+        public bool VerifyResult { get; set; } = true;
+
+        public Task<bool> DetectAsync(IProgress<int> progress, CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+        public Task<byte[]> ReadIdAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default) => Task.FromResult(Array.Empty<byte>());
+
+        public Task<byte[]> ReadAsync(ChipProfile chip, int startAddress, int length, IProgress<int> progress, CancellationToken cancellationToken = default)
+        {
+            Calls.Add($"Read:{startAddress:X}:{length}");
+            return Task.FromResult(ReadData);
+        }
+
+        public Task WriteAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, bool skipBlankPages = false, CancellationToken cancellationToken = default)
+        {
+            Calls.Add($"Write:{startAddress:X}:{data.Length}:{skipBlankPages}");
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> VerifyAsync(ChipProfile chip, int startAddress, byte[] data, IProgress<int> progress, CancellationToken cancellationToken = default)
+        {
+            Calls.Add($"Verify:{startAddress:X}:{data.Length}");
+            return Task.FromResult(VerifyResult);
+        }
+
+        public Task UnprotectAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default)
+        {
+            Calls.Add("Unprotect");
+            return Task.CompletedTask;
+        }
+
+        public Task EraseAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken = default)
+        {
+            Calls.Add("Erase");
+            return Task.CompletedTask;
+        }
     }
 }

@@ -875,8 +875,14 @@ public partial class MainWindow : Window
         await RunOperationAsync("Read chip", _buffer.Length, async (progress, cancellationToken) =>
         {
             var startAddress = ParseStartAddress();
-            AppendLog($"Read request: {FormatBytes(_buffer.Length)} from 0x{startAddress:X6}");
-            SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress, cancellationToken));
+            SetActiveBuffer(await ProgrammerWorkflowService.ReadChipAsync(
+                _programmer,
+                chip,
+                startAddress,
+                _buffer.Length,
+                progress,
+                AppendLog,
+                cancellationToken));
             RebuildRows();
             UpdateStatus();
             readCompleted = true;
@@ -931,9 +937,16 @@ public partial class MainWindow : Window
         {
             var startAddress = ParseStartAddress();
             var skipBlankPages = SkipBlankPagesCheckBox.IsChecked == true;
-            AppendLog($"Write request: {FormatBytes(_buffer.Length)} to 0x{startAddress:X6}{(skipBlankPages ? " (skip FF pages)" : "")}, voltage profile {chip.Volts}");
-            await UnprotectIfRequestedAsync(chip, progress, cancellationToken);
-            await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages, cancellationToken);
+            await ProgrammerWorkflowService.WriteChipAsync(
+                _programmer,
+                chip,
+                startAddress,
+                _buffer,
+                skipBlankPages,
+                UnprotectChipCheckBox.IsChecked == true,
+                progress,
+                AppendLog,
+                cancellationToken);
         });
     }
 
@@ -953,9 +966,14 @@ public partial class MainWindow : Window
         await RunOperationAsync("Verify", _buffer.Length, async (progress, cancellationToken) =>
         {
             var startAddress = ParseStartAddress();
-            AppendLog($"Verify request: {FormatBytes(_buffer.Length)} at 0x{startAddress:X6}");
-            var ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress, cancellationToken);
-            AppendLog(ok ? "Verify OK" : "Verify failed");
+            await ProgrammerWorkflowService.VerifyChipAsync(
+                _programmer,
+                chip,
+                startAddress,
+                _buffer,
+                progress,
+                AppendLog,
+                cancellationToken);
         });
     }
 
@@ -1105,8 +1123,13 @@ public partial class MainWindow : Window
 
         await RunOperationAsync("Erase chip", null, async (progress, cancellationToken) =>
         {
-            await UnprotectIfRequestedAsync(chip, progress, cancellationToken);
-            await _programmer.EraseAsync(chip, progress, cancellationToken);
+            await ProgrammerWorkflowService.EraseChipAsync(
+                _programmer,
+                chip,
+                UnprotectChipCheckBox.IsChecked == true,
+                progress,
+                AppendLog,
+                cancellationToken);
         });
     }
 
