@@ -19,6 +19,7 @@ Thumbs.db
 Desktop.ini
 
 # Local agent/workspace files
+PROJECT_ASSESSMENT_VI.md
 .agent/
 .agents/
 .codex/
