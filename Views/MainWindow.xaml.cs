@@ -1757,13 +1757,13 @@ public partial class MainWindow : Window
             }
             else
             {
-                if (!TryParseHexPattern(query, out pattern))
+                if (!HexSearchService.TryParseHexPattern(query, out pattern))
                 {
                     AppendLog($"Invalid hex pattern: {query}");
                     return;
                 }
 
-                label = $"Hex {FormatHexPattern(pattern)}";
+                label = $"Hex {HexSearchService.FormatHexPattern(pattern)}";
             }
 
             if (pattern.Length == 0)
@@ -1775,8 +1775,8 @@ public partial class MainWindow : Window
             var buffer = _buffer;
             AppendLog($"Searching all {FormatBytes(buffer.Length)}...");
             var offsets = await Task.Run(() => string.Equals(mode, "Text", StringComparison.OrdinalIgnoreCase)
-                ? FindAllAsciiText(buffer, pattern)
-                : FindAllBytes(buffer, pattern));
+                ? HexSearchService.FindAllAsciiText(buffer, pattern)
+                : HexSearchService.FindAllBytes(buffer, pattern));
 
             if (offsets.Count == 0)
             {
@@ -1827,8 +1827,8 @@ public partial class MainWindow : Window
             var replaceBytes = PadReplacement(replacement, pattern.Length);
             var offsets = replaceAll
                 ? await Task.Run(() => string.Equals(mode, "Text", StringComparison.OrdinalIgnoreCase)
-                    ? FindAllAsciiText(_buffer, pattern)
-                    : FindAllBytes(_buffer, pattern))
+                    ? HexSearchService.FindAllAsciiText(_buffer, pattern)
+                    : HexSearchService.FindAllBytes(_buffer, pattern))
                 : await FindSingleReplaceOffsetAsync(mode, pattern, forward);
             if (replaceAll)
             {
@@ -1914,7 +1914,7 @@ public partial class MainWindow : Window
         switch (mode)
         {
             case "Offset":
-                if (TryParseOffset(query, out var parsedOffset))
+                if (HexSearchService.TryParseOffset(query, out var parsedOffset))
                 {
                     return SearchResult.Success(parsedOffset, 1);
                 }
@@ -1925,7 +1925,7 @@ public partial class MainWindow : Window
                 return await SearchTextAsync(query, forward, $"Text not found: {query}");
 
             default:
-                if (!TryParseHexPattern(query, out var pattern))
+                if (!HexSearchService.TryParseHexPattern(query, out var pattern))
                 {
                     return SearchResult.Fail($"Invalid hex pattern: {query}");
                 }
@@ -1944,10 +1944,10 @@ public partial class MainWindow : Window
         var buffer = _buffer;
         var startOffset = Math.Clamp(_currentOffset + (forward ? 1 : -1), 0, Math.Max(0, buffer.Length - 1));
         AppendLog($"Searching {FormatBytes(buffer.Length)}...");
-        var offset = await Task.Run(() => FindBytes(buffer, pattern, startOffset, forward));
+        var offset = await Task.Run(() => HexSearchService.FindBytes(buffer, pattern, startOffset, forward));
         if (offset < 0 && startOffset != 0)
         {
-            offset = await Task.Run(() => FindBytes(buffer, pattern, forward ? 0 : buffer.Length - 1, forward));
+            offset = await Task.Run(() => HexSearchService.FindBytes(buffer, pattern, forward ? 0 : buffer.Length - 1, forward));
         }
 
         return offset >= 0 ? SearchResult.Success(offset, pattern.Length) : SearchResult.Fail(notFoundMessage);
@@ -1964,10 +1964,10 @@ public partial class MainWindow : Window
         var buffer = _buffer;
         var startOffset = Math.Clamp(_currentOffset + (forward ? 1 : -1), 0, Math.Max(0, buffer.Length - 1));
         AppendLog($"Searching {FormatBytes(buffer.Length)}...");
-        var offset = await Task.Run(() => FindAsciiText(buffer, pattern, startOffset, forward));
+        var offset = await Task.Run(() => HexSearchService.FindAsciiText(buffer, pattern, startOffset, forward));
         if (offset < 0 && startOffset != 0)
         {
-            offset = await Task.Run(() => FindAsciiText(buffer, pattern, forward ? 0 : buffer.Length - 1, forward));
+            offset = await Task.Run(() => HexSearchService.FindAsciiText(buffer, pattern, forward ? 0 : buffer.Length - 1, forward));
         }
 
         return offset >= 0 ? SearchResult.Success(offset, pattern.Length) : SearchResult.Fail(notFoundMessage);
@@ -1979,7 +1979,7 @@ public partial class MainWindow : Window
         if ((uint)selectedOffset < _buffer.Length && selectedOffset <= _buffer.Length - pattern.Length)
         {
             var matchesSelected = string.Equals(mode, "Text", StringComparison.OrdinalIgnoreCase)
-                ? AsciiEqualsIgnoreCase(_buffer, pattern, selectedOffset)
+                ? HexSearchService.AsciiEqualsIgnoreCase(_buffer, pattern, selectedOffset)
                 : _buffer.AsSpan(selectedOffset, pattern.Length).SequenceEqual(pattern);
             if (matchesSelected)
             {
@@ -2007,19 +2007,19 @@ public partial class MainWindow : Window
         }
         else
         {
-            if (!TryParseHexPattern(query, out pattern))
+            if (!HexSearchService.TryParseHexPattern(query, out pattern))
             {
                 AppendLog($"Invalid hex pattern: {query}");
                 return false;
             }
 
-            if (!TryParseHexPattern(replacementText, out replacement))
+            if (!HexSearchService.TryParseHexPattern(replacementText, out replacement))
             {
                 AppendLog($"Invalid replacement hex: {replacementText}");
                 return false;
             }
 
-            label = $"Hex {FormatHexPattern(pattern)}";
+            label = $"Hex {HexSearchService.FormatHexPattern(pattern)}";
         }
 
         if (pattern.Length == 0)
@@ -2091,7 +2091,7 @@ public partial class MainWindow : Window
 
         var length = Math.Max(1, CurrentHexSearchMode().Equals("Text", StringComparison.OrdinalIgnoreCase)
             ? Encoding.ASCII.GetByteCount(query)
-            : TryParseHexPattern(query, out var pattern) ? pattern.Length : 1);
+            : HexSearchService.TryParseHexPattern(query, out var pattern) ? pattern.Length : 1);
         foreach (var offset in offsets)
         {
             _searchHits.Add(CreateSearchHit(offset, length));
@@ -2124,31 +2124,6 @@ public partial class MainWindow : Window
 
     private static int AlignOffset(int offset) => offset / BytesPerHexRow * BytesPerHexRow;
 
-    private static int FindBytes(byte[] buffer, byte[] pattern, int startOffset, bool forward)
-    {
-        if (pattern.Length == 0 || pattern.Length > buffer.Length)
-        {
-            return -1;
-        }
-
-        startOffset = Math.Clamp(startOffset, 0, buffer.Length - 1);
-        if (forward)
-        {
-            var index = buffer.AsSpan(startOffset).IndexOf(pattern);
-            return index < 0 ? -1 : startOffset + index;
-        }
-
-        for (var offset = Math.Min(startOffset, buffer.Length - pattern.Length); offset >= 0; offset--)
-        {
-            if (buffer.AsSpan(offset, pattern.Length).SequenceEqual(pattern))
-            {
-                return offset;
-            }
-        }
-
-        return -1;
-    }
-
     private static byte[] StripXgproMetadata(byte[] buffer, out int markerOffset, out int removedBytes)
     {
         markerOffset = -1;
@@ -2160,7 +2135,7 @@ public partial class MainWindow : Window
             return buffer;
         }
 
-        markerOffset = FindBytes(buffer, XgproMetadataMarker, lastPossibleOffset, forward: false);
+        markerOffset = HexSearchService.FindBytes(buffer, XgproMetadataMarker, lastPossibleOffset, forward: false);
         if (markerOffset < 0)
         {
             return buffer;
@@ -2205,160 +2180,6 @@ public partial class MainWindow : Window
         reason = $"valid BIOS size {FormatBytes(targetSize)} with {FormatBytes(excess)} trailing bytes";
         removedBytes = excess;
         return result;
-    }
-
-    private static List<int> FindAllBytes(byte[] buffer, byte[] pattern)
-    {
-        var offsets = new List<int>();
-        if (pattern.Length == 0 || pattern.Length > buffer.Length)
-        {
-            return offsets;
-        }
-
-        var offset = 0;
-        while (offset <= buffer.Length - pattern.Length)
-        {
-            var index = buffer.AsSpan(offset).IndexOf(pattern);
-            if (index < 0)
-            {
-                break;
-            }
-
-            var absolute = offset + index;
-            offsets.Add(absolute);
-            offset = absolute + 1;
-        }
-
-        return offsets;
-    }
-
-    private static int FindAsciiText(byte[] buffer, byte[] pattern, int startOffset, bool forward)
-    {
-        if (pattern.Length == 0 || pattern.Length > buffer.Length)
-        {
-            return -1;
-        }
-
-        startOffset = Math.Clamp(startOffset, 0, buffer.Length - 1);
-        if (forward)
-        {
-            for (var offset = startOffset; offset <= buffer.Length - pattern.Length; offset++)
-            {
-                if (AsciiEqualsIgnoreCase(buffer, pattern, offset))
-                {
-                    return offset;
-                }
-            }
-
-            return -1;
-        }
-
-        for (var offset = Math.Min(startOffset, buffer.Length - pattern.Length); offset >= 0; offset--)
-        {
-            if (AsciiEqualsIgnoreCase(buffer, pattern, offset))
-            {
-                return offset;
-            }
-        }
-
-        return -1;
-    }
-
-    private static List<int> FindAllAsciiText(byte[] buffer, byte[] pattern)
-    {
-        var offsets = new List<int>();
-        if (pattern.Length == 0 || pattern.Length > buffer.Length)
-        {
-            return offsets;
-        }
-
-        for (var offset = 0; offset <= buffer.Length - pattern.Length; offset++)
-        {
-            if (AsciiEqualsIgnoreCase(buffer, pattern, offset))
-            {
-                offsets.Add(offset);
-            }
-        }
-
-        return offsets;
-    }
-
-    private static bool AsciiEqualsIgnoreCase(byte[] buffer, byte[] pattern, int offset)
-    {
-        for (var i = 0; i < pattern.Length; i++)
-        {
-            if (ToAsciiUpper(buffer[offset + i]) != ToAsciiUpper(pattern[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static byte ToAsciiUpper(byte value) => value is >= (byte)'a' and <= (byte)'z'
-        ? (byte)(value - 32)
-        : value;
-
-    internal static bool TryParseHexPattern(string text, out byte[] pattern)
-    {
-        var builder = new StringBuilder(text.Length);
-        for (var i = 0; i < text.Length; i++)
-        {
-            var ch = text[i];
-            if (Uri.IsHexDigit(ch))
-            {
-                if (ch == '0' && i + 1 < text.Length && text[i + 1] is 'x' or 'X')
-                {
-                    i++;
-                    continue;
-                }
-
-                builder.Append(ch);
-                continue;
-            }
-
-            if (char.IsWhiteSpace(ch) || ch is '-' or '_' or ',' or ';')
-            {
-                continue;
-            }
-
-            pattern = [];
-            return false;
-        }
-
-        var hex = builder.ToString();
-        if (hex.Length == 0 || hex.Length % 2 != 0)
-        {
-            pattern = [];
-            return false;
-        }
-
-        pattern = new byte[hex.Length / 2];
-        for (var i = 0; i < pattern.Length; i++)
-        {
-            if (!byte.TryParse(hex.Substring(i * 2, 2), System.Globalization.NumberStyles.HexNumber, null, out pattern[i]))
-            {
-                pattern = [];
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    internal static string FormatHexPattern(byte[] pattern) =>
-        string.Join(" ", pattern.Select(b => b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture)));
-
-    private static bool TryParseOffset(string text, out int offset)
-    {
-        text = text.Trim();
-        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-        {
-            text = text[2..];
-        }
-
-        return int.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out offset);
     }
 
     private async void LoadFile_Click(object sender, RoutedEventArgs e)
@@ -2703,7 +2524,7 @@ public partial class MainWindow : Window
         UpdateStatus();
 
         var action = changed ? "filled" : "already matches";
-        AppendLog($"{MemoryTabDisplayName(state)} selection {action}: 0x{start:X6}-0x{start + length - 1:X6} with {FormatHexPattern(dialog.FillPattern)}");
+        AppendLog($"{MemoryTabDisplayName(state)} selection {action}: 0x{start:X6}-0x{start + length - 1:X6} with {HexSearchService.FormatHexPattern(dialog.FillPattern)}");
     }
 
     private void Fill00_Click(object sender, RoutedEventArgs e)

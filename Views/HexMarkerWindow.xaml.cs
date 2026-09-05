@@ -114,7 +114,7 @@ public partial class HexMarkerWindow : Window
             return false;
         }
 
-        if (!MainWindow.TryParseHexPattern(hex, out var pattern))
+        if (!HexSearchService.TryParseHexPattern(hex, out var pattern))
         {
             MessageBox.Show("Invalid hex marker.", "Hex Marker", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
@@ -123,7 +123,7 @@ public partial class HexMarkerWindow : Window
         marker = new HexMarker
         {
             Name = name,
-            Hex = MainWindow.FormatHexPattern(pattern)
+            Hex = HexSearchService.FormatHexPattern(pattern)
         };
         return true;
     }

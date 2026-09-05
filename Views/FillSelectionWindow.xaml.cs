@@ -69,7 +69,7 @@ public partial class FillSelectionWindow : Window
     private void Fill_Click(object sender, RoutedEventArgs e)
     {
         var hex = HexBox.Text.Trim();
-        if (!MainWindow.TryParseHexPattern(hex, out var pattern))
+        if (!HexSearchService.TryParseHexPattern(hex, out var pattern))
         {
             MessageBox.Show("Invalid fill hex.", "Fill Selection", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -120,7 +120,7 @@ public partial class FillSelectionWindow : Window
             return false;
         }
 
-        if (!MainWindow.TryParseHexPattern(hex, out var pattern))
+        if (!HexSearchService.TryParseHexPattern(hex, out var pattern))
         {
             MessageBox.Show("Invalid fill hex.", "Fill Selection", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
@@ -129,7 +129,7 @@ public partial class FillSelectionWindow : Window
         preset = new HexFillPreset
         {
             Name = name,
-            Hex = MainWindow.FormatHexPattern(pattern)
+            Hex = HexSearchService.FormatHexPattern(pattern)
         };
         return true;
     }
