@@ -8,6 +8,6 @@
     <Product>XGecu T48 SDK</Product>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\T48Sdk\T48.SDK.csproj" SetTargetFramework="TargetFramework=net10.0-windows" />
+    <ProjectReference Include="..\..\T48.SDK.csproj" SetTargetFramework="TargetFramework=net10.0-windows" />
   </ItemGroup>
 </Project>

@@ -55,7 +55,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="SDK\T48.SDK\src\T48Sdk\T48.SDK.csproj" />
+    <ProjectReference Include="SDK\T48.SDK\src\T48.SDK.csproj" />
     <ProjectReference Include="SDK\RT809F.SDK\src\RT809F.SDK.csproj" />
     <ProjectReference Include="SDK\RT809H.SDK\src\RT809H.SDK.csproj" />
   </ItemGroup>

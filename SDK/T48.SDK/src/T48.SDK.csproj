@@ -18,4 +18,10 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="samples\**\*.cs" />
+    <Compile Remove="T48Sdk\**\*.cs" />
+    <None Remove="samples\**\*" />
+    <None Remove="T48Sdk\**\*" />
+  </ItemGroup>
 </Project>
