@@ -712,86 +712,17 @@ public partial class MainWindow : Window
     private void ApplyProgrammerDetection(ProgrammerDetection detection, bool logWhenChanged, bool forceLog)
     {
         var selectedMode = (ProgrammerSelectorCombo?.SelectedItem as ProgrammerOption)?.Key ?? "auto";
+        var selection = ProgrammerWorkflowService.ResolveSelection(selectedMode, detection);
 
-        if (selectedMode == "auto")
+        if (selection.IsConnected)
         {
-            if (detection.Ch341Detected)
-            {
-                SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", logWhenChanged, forceLog);
-                return;
-            }
-
-            if (detection.Ch347Detected)
-            {
-                SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", logWhenChanged, forceLog);
-                return;
-            }
-
-            if (detection.Rt809fDetected)
-            {
-                SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
-                return;
-            }
-
-            if (detection.Rt809hDetected)
-            {
-                SetConnectedProgrammer("rt809h", new RT809HSDKProgrammer(), "RT809H connected", logWhenChanged, forceLog);
-                return;
-            }
-
-            if (detection.T48Detected)
-            {
-                SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", logWhenChanged, forceLog);
-                return;
-            }
-        }
-        else
-        {
-            switch (selectedMode)
-            {
-                case "t48":
-                    if (detection.T48Detected)
-                    {
-                        SetConnectedProgrammer("t48", new T48SDKProgrammer(), "XGecu T48 connected", logWhenChanged, forceLog);
-                        return;
-                    }
-                    break;
-                case "rt809f":
-                    if (detection.Rt809fDetected)
-                    {
-                        SetConnectedProgrammer("rt809f", new RT809FSDKProgrammer(), "RT809F connected", logWhenChanged, forceLog);
-                        return;
-                    }
-                    break;
-                case "rt809h":
-                    if (detection.Rt809hDetected)
-                    {
-                        SetConnectedProgrammer("rt809h", new RT809HSDKProgrammer(), "RT809H connected", logWhenChanged, forceLog);
-                        return;
-                    }
-                    break;
-                case "ch347":
-                    if (detection.Ch347Detected)
-                    {
-                        SetConnectedProgrammer("ch347", new Ch347NativeProgrammer(), "CH347 connected", logWhenChanged, forceLog);
-                        return;
-                    }
-                    break;
-                case "ch341":
-                    if (detection.Ch341Detected)
-                    {
-                        SetConnectedProgrammer("ch341", new ChNativeProgrammer(), "CH341 connected", logWhenChanged, forceLog);
-                        return;
-                    }
-                    break;
-            }
+            SetConnectedProgrammer(selection.Key, selection.CreateProgrammer(), selection.StatusText, logWhenChanged, forceLog);
+            return;
         }
 
         _programmer = new MockProgrammer();
         _activeProgrammerKey = "none";
-        HardwareStatusText.Text = selectedMode == "auto" 
-            ? "Programmer disconnected" 
-            : $"{_programmerOptions.FirstOrDefault(x => x.Key == selectedMode)?.Name ?? "Programmer"} disconnected";
+        HardwareStatusText.Text = selection.StatusText;
         UpdateProgrammerControls();
         if (forceLog)
         {

@@ -1,6 +1,6 @@
 namespace NexusProgrammer;
 
-internal sealed record ProgrammerDetection(
+public sealed record ProgrammerDetection(
     bool T48Detected,
     bool Rt809fDetected,
     bool Rt809hDetected,
