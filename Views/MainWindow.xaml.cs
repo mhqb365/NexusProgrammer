@@ -118,6 +118,7 @@ public partial class MainWindow : Window
     private bool _isApplyingDetectedChip;
     private bool _isSearching;
     private bool _updatingHexScrollBar;
+    private CancellationTokenSource? _operationCts;
     private HexSearchWindow? _hexSearchWindow;
     private HexReplaceWindow? _hexReplaceWindow;
 
@@ -844,11 +845,11 @@ public partial class MainWindow : Window
     }
 
     private Task DetectIcAsync(bool logLifecycle, bool autoApplySingle, bool openCatalogOnMiss) =>
-        RunOperationAsync("Read ID", async progress =>
+        RunOperationAsync("Read ID", async (progress, cancellationToken) =>
         {
             var chip = CurrentChip();
             AppendLog($"Detect request: reading JEDEC ID with {chip.Volts} probe profile");
-            var id = await _programmer.ReadIdAsync(chip, progress);
+            var id = await _programmer.ReadIdAsync(chip, progress, cancellationToken);
             AppendLog($"IC ID: {BitConverter.ToString(id).Replace("-", " ")}");
             if (id.Length > 0 && !IsInvalidJedecId(id))
             {
@@ -856,10 +857,10 @@ public partial class MainWindow : Window
             }
 
             ShowChipSelectionForId(id, autoApplySingle, openCatalogOnMiss);
-            await RefreshT48DetectedVoltageProfileAsync(chip, id, progress);
+            await RefreshT48DetectedVoltageProfileAsync(chip, id, progress, cancellationToken);
         }, logLifecycle: logLifecycle);
 
-    private async Task RefreshT48DetectedVoltageProfileAsync(ChipProfile probeChip, byte[] detectedId, IProgress<int> progress)
+    private async Task RefreshT48DetectedVoltageProfileAsync(ChipProfile probeChip, byte[] detectedId, IProgress<int> progress, CancellationToken cancellationToken)
     {
         if (_programmer is not T48SDKProgrammer)
         {
@@ -873,7 +874,7 @@ public partial class MainWindow : Window
         }
 
         AppendLog($"Detected profile changed to {detectedChip.Name}, voltage profile {detectedChip.Volts}. Re-applying T48 voltage profile.");
-        var confirmedId = await _programmer.ReadIdAsync(detectedChip, progress);
+        var confirmedId = await _programmer.ReadIdAsync(detectedChip, progress, cancellationToken);
         AppendLog($"Confirmed IC ID with {detectedChip.Volts} profile: {BitConverter.ToString(confirmedId).Replace("-", " ")}");
     }
 
@@ -961,11 +962,11 @@ public partial class MainWindow : Window
         }
 
         var readCompleted = false;
-        await RunOperationAsync("Read chip", _buffer.Length, async progress =>
+        await RunOperationAsync("Read chip", _buffer.Length, async (progress, cancellationToken) =>
         {
             var startAddress = ParseStartAddress();
             AppendLog($"Read request: {FormatBytes(_buffer.Length)} from 0x{startAddress:X6}");
-            SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
+            SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress, cancellationToken));
             RebuildRows();
             UpdateStatus();
             readCompleted = true;
@@ -1016,13 +1017,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        await RunOperationAsync("Write chip", _buffer.Length, async progress =>
+        await RunOperationAsync("Write chip", _buffer.Length, async (progress, cancellationToken) =>
         {
             var startAddress = ParseStartAddress();
             var skipBlankPages = SkipBlankPagesCheckBox.IsChecked == true;
             AppendLog($"Write request: {FormatBytes(_buffer.Length)} to 0x{startAddress:X6}{(skipBlankPages ? " (skip FF pages)" : "")}, voltage profile {chip.Volts}");
-            await UnprotectIfRequestedAsync(chip, progress);
-            await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages);
+            await UnprotectIfRequestedAsync(chip, progress, cancellationToken);
+            await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages, cancellationToken);
         });
     }
 
@@ -1039,11 +1040,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        await RunOperationAsync("Verify", _buffer.Length, async progress =>
+        await RunOperationAsync("Verify", _buffer.Length, async (progress, cancellationToken) =>
         {
             var startAddress = ParseStartAddress();
             AppendLog($"Verify request: {FormatBytes(_buffer.Length)} at 0x{startAddress:X6}");
-            var ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
+            var ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress, cancellationToken);
             AppendLog(ok ? "Verify OK" : "Verify failed");
         });
     }
@@ -1206,16 +1207,23 @@ public partial class MainWindow : Window
             return;
         }
 
-        await RunOperationAsync("Erase chip", null, async progress =>
+        await RunOperationAsync("Erase chip", null, async (progress, cancellationToken) =>
         {
-            await UnprotectIfRequestedAsync(chip, progress);
-            await _programmer.EraseAsync(chip, progress);
+            await UnprotectIfRequestedAsync(chip, progress, cancellationToken);
+            await _programmer.EraseAsync(chip, progress, cancellationToken);
         });
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
-        AppendLog("Stop requested. Current operation will finish its current block");
+        if (_operationCts is null || _operationCts.IsCancellationRequested)
+        {
+            AppendLog("Stop requested, but no cancellable operation is running");
+            return;
+        }
+
+        _operationCts.Cancel();
+        AppendLog("Stop requested. Cancelling current operation; hardware may finish the current page/block first");
     }
 
     private void ScriptButton_Click(object sender, RoutedEventArgs e)
@@ -2733,7 +2741,7 @@ public partial class MainWindow : Window
         }
 
         var saveAfterScript = false;
-        await RunOperationAsync(script, null, async progress =>
+        await RunOperationAsync(script, null, async (progress, cancellationToken) =>
         {
             var startAddress = ParseStartAddress();
             if (isReadVerifyScript)
@@ -2759,7 +2767,8 @@ public partial class MainWindow : Window
                             RebuildRows();
                             UpdateStatus();
                         },
-                        () => AppendLog("Script stage: verify started"));
+                        () => AppendLog("Script stage: verify started"),
+                        cancellationToken);
                     readElapsed = result.ReadElapsed;
                     verifyElapsed = result.VerifyElapsed;
                     readOk = result.Verified;
@@ -2767,7 +2776,7 @@ public partial class MainWindow : Window
                 else
                 {
                     var stageWatch = Stopwatch.StartNew();
-                    SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress));
+                    SetActiveBuffer(await _programmer.ReadAsync(chip, startAddress, _buffer.Length, progress, cancellationToken));
                     stageWatch.Stop();
                     readElapsed = stageWatch.Elapsed;
                     AppendLog($"Script stage: read completed: {FormatBytes(_buffer.Length)} in {FormatDuration(readElapsed)} ({FormatSpeed(_buffer.Length, readElapsed)})");
@@ -2775,7 +2784,7 @@ public partial class MainWindow : Window
                     UpdateStatus();
                     AppendLog("Script stage: verify started");
                     stageWatch.Restart();
-                    readOk = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
+                    readOk = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress, cancellationToken);
                     stageWatch.Stop();
                     verifyElapsed = stageWatch.Elapsed;
                 }
@@ -2790,7 +2799,7 @@ public partial class MainWindow : Window
 
             var skipBlankPages = SkipBlankPagesCheckBox.IsChecked == true;
             AppendLog($"Script request: erase, write and verify {FormatBytes(_buffer.Length)} at 0x{startAddress:X6}");
-            await UnprotectIfRequestedAsync(chip, progress);
+            await UnprotectIfRequestedAsync(chip, progress, cancellationToken);
             AppendLog("Script stage: erase started");
             TimeSpan eraseElapsed;
             TimeSpan writeElapsed;
@@ -2817,7 +2826,8 @@ public partial class MainWindow : Window
                         writeElapsed = elapsed;
                         AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(_buffer.Length, writeElapsed)})");
                     },
-                    () => AppendLog("Script stage: verify started"));
+                    () => AppendLog("Script stage: verify started"),
+                    cancellationToken);
                 eraseElapsed = result.EraseElapsed;
                 writeElapsed = result.WriteElapsed;
                 finalVerifyElapsed = result.VerifyElapsed;
@@ -2826,20 +2836,20 @@ public partial class MainWindow : Window
             else
             {
                 var eraseWriteVerifyWatch = Stopwatch.StartNew();
-                await _programmer.EraseAsync(chip, progress);
+                await _programmer.EraseAsync(chip, progress, cancellationToken);
                 eraseWriteVerifyWatch.Stop();
                 eraseElapsed = eraseWriteVerifyWatch.Elapsed;
                 AppendLog($"Script stage: erase completed in {FormatDuration(eraseElapsed)}");
-                await UnprotectIfRequestedAsync(chip, progress);
+                await UnprotectIfRequestedAsync(chip, progress, cancellationToken);
                 AppendLog("Script stage: write started");
                 eraseWriteVerifyWatch.Restart();
-                await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages);
+                await _programmer.WriteAsync(chip, startAddress, _buffer, progress, skipBlankPages, cancellationToken);
                 eraseWriteVerifyWatch.Stop();
                 writeElapsed = eraseWriteVerifyWatch.Elapsed;
                 AppendLog($"Script stage: write completed: {FormatBytes(_buffer.Length)} in {FormatDuration(writeElapsed)} ({FormatSpeed(_buffer.Length, writeElapsed)})");
                 AppendLog("Script stage: verify started");
                 eraseWriteVerifyWatch.Restart();
-                ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress);
+                ok = await _programmer.VerifyAsync(chip, startAddress, _buffer, progress, cancellationToken);
                 eraseWriteVerifyWatch.Stop();
                 finalVerifyElapsed = eraseWriteVerifyWatch.Elapsed;
             }
@@ -2855,7 +2865,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task UnprotectIfRequestedAsync(ChipProfile chip, IProgress<int> progress)
+    private async Task UnprotectIfRequestedAsync(ChipProfile chip, IProgress<int> progress, CancellationToken cancellationToken)
     {
         if (UnprotectChipCheckBox.IsChecked != true)
         {
@@ -2863,7 +2873,7 @@ public partial class MainWindow : Window
         }
 
         AppendLog($"Unprotect request: {chip.Name}");
-        await _programmer.UnprotectAsync(chip, progress);
+        await _programmer.UnprotectAsync(chip, progress, cancellationToken);
         AppendLog("Unprotect completed");
     }
 
@@ -2921,9 +2931,12 @@ public partial class MainWindow : Window
         UpdateService.FormatVersion(UpdateService.CurrentVersion);
 
     private Task RunOperationAsync(string name, Func<IProgress<int>, Task> operation) =>
-        RunOperationAsync(name, null, operation);
+        RunOperationAsync(name, null, (progress, _) => operation(progress));
 
     private Task RunOperationAsync(string name, Func<IProgress<int>, Task> operation, bool logLifecycle) =>
+        RunOperationAsync(name, null, (progress, _) => operation(progress), logLifecycle);
+
+    private Task RunOperationAsync(string name, Func<IProgress<int>, CancellationToken, Task> operation, bool logLifecycle) =>
         RunOperationAsync(name, null, operation, logLifecycle);
 
     private async Task RunDialogOperationAsync(
@@ -2980,7 +2993,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task RunOperationAsync(string name, int? byteCount, Func<IProgress<int>, Task> operation, bool logLifecycle = true)
+    private async Task RunOperationAsync(string name, int? byteCount, Func<IProgress<int>, CancellationToken, Task> operation, bool logLifecycle = true)
     {
         if (_isBusy)
         {
@@ -2989,6 +3002,8 @@ public partial class MainWindow : Window
         }
 
         _isBusy = true;
+        using var operationCts = new CancellationTokenSource();
+        _operationCts = operationCts;
         OperationStatusText.Text = name;
         OperationProgress.Value = 0;
         var progress = new Progress<int>(value => OperationProgress.Value = Math.Clamp(value, 0, 100));
@@ -3000,7 +3015,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await operation(progress);
+            await operation(progress, operationCts.Token);
             stopwatch.Stop();
             OperationProgress.Value = 100;
             OperationStatusText.Text = "Ready";
@@ -3012,6 +3027,15 @@ public partial class MainWindow : Window
             }
 
             PlayOperationSound(name, success: true);
+        }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            OperationStatusText.Text = "Cancelled";
+            if (logLifecycle)
+            {
+                AppendLog($"{name} cancelled after {FormatDuration(stopwatch.Elapsed)}");
+            }
         }
         catch (Exception ex)
         {
@@ -3026,6 +3050,11 @@ public partial class MainWindow : Window
         }
         finally
         {
+            if (ReferenceEquals(_operationCts, operationCts))
+            {
+                _operationCts = null;
+            }
+
             _isBusy = false;
         }
     }
