@@ -66,8 +66,8 @@ sources so local builds do not require network access.
 
 ```text
 T48.SDK/
-  src/T48Sdk/              Reusable SDK library
-  samples/T48Probe/        CLI probe and test tool
+  src/                     Reusable SDK library
+  src/samples/T48Probe/    CLI probe and test tool
   tools/                   USBPcap parsing helpers
   PROTOCOL_NOTES.md        Reverse-engineering notes
 ```
@@ -89,8 +89,8 @@ dotnet build .\SDK\T48.SDK\XGecuT48SDK.sln
 Built DLLs:
 
 ```text
-T48.SDK\src\T48Sdk\bin\Debug\net8.0-windows\T48.SDK.dll
-T48.SDK\src\T48Sdk\bin\Debug\net10.0-windows\T48.SDK.dll
+T48.SDK\src\bin\Debug\net8.0-windows\T48.SDK.dll
+T48.SDK\src\bin\Debug\net10.0-windows\T48.SDK.dll
 ```
 
 ## Add To Another .NET App
@@ -98,14 +98,14 @@ T48.SDK\src\T48Sdk\bin\Debug\net10.0-windows\T48.SDK.dll
 Preferred: add a project reference to:
 
 ```text
-T48.SDK\src\T48Sdk\T48.SDK.csproj
+T48.SDK\src\T48.SDK.csproj
 ```
 
 Example `.csproj` reference:
 
 ```xml
 <ItemGroup>
-  <ProjectReference Include="..\T48.SDK\src\T48Sdk\T48.SDK.csproj" />
+  <ProjectReference Include="..\T48.SDK\src\T48.SDK.csproj" />
 </ItemGroup>
 ```
 
@@ -185,61 +185,61 @@ The sample CLI is useful for testing the programmer before integrating the SDK.
 List devices:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" list
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" list
 ```
 
 Show endpoints:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" pipes
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" pipes
 ```
 
 Read ID:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-id
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-id
 ```
 
 Read 256 bytes:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-flash 0 256 "T48.SDK\read-000000.bin"
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-flash 0 256 "T48.SDK\read-000000.bin"
 ```
 
 Read full W25Q128, 16 MiB:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-flash 0 16777216 "T48.SDK\w25q128-full.bin"
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-flash 0 16777216 "T48.SDK\w25q128-full.bin"
 ```
 
 Blank-check full W25Q128:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" blank-check 0 16777216 "T48.SDK\blank.log"
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" blank-check 0 16777216 "T48.SDK\blank.log"
 ```
 
 Erase chip:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" erase-chip "T48.SDK\erase.log"
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" erase-chip "T48.SDK\erase.log"
 ```
 
 Optional smooth erase progress estimate, in seconds:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" erase-chip "T48.SDK\erase.log" 45
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" erase-chip "T48.SDK\erase.log" 45
 ```
 
 Write image:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" write-flash 0 "T48.SDK\w25q128-full.bin" "T48.SDK\write.log"
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" write-flash 0 "T48.SDK\w25q128-full.bin" "T48.SDK\write.log"
 ```
 
 Verify by readback and binary compare:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-flash 0 16777216 "T48.SDK\w25q128-verify-read.bin"
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-flash 0 16777216 "T48.SDK\w25q128-verify-read.bin"
 cmd /c fc /b "T48.SDK\w25q128-full.bin" "T48.SDK\w25q128-verify-read.bin"
 ```
 
@@ -252,7 +252,7 @@ FC: no differences encountered
 Raw transfer for protocol work:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" raw "0501030000000000" 32 t48-usb.log
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" raw "0501030000000000" 32 t48-usb.log
 ```
 
 ## Logs
@@ -263,7 +263,7 @@ records USB direction, pipe, byte count, elapsed time, and payload hex.
 Example:
 
 ```powershell
-dotnet ".\T48.SDK\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-id "T48.SDK\read-id.log"
+dotnet ".\T48.SDK\src\samples\T48Probe\bin\Debug\net10.0-windows\T48Probe.dll" read-id "T48.SDK\read-id.log"
 ```
 
 ## Progress
