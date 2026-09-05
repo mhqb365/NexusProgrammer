@@ -12,7 +12,7 @@ A modern BIOS programming tool for hardware technicians and repair professionals
 
 - Supports CH341, CH347, XGecu T48, RT809F and RT809H programmers
 - Automatic programmer detection, IC detection, IC catalog search and custom IC entries
-- Hex-format buffer preview and editing
+- Hex Editor with multi-buffer Memory tabs, search/replace, go to offset, copy/paste, fill selection, hex markers and selection status
 - Multiple Memory tabs for comparing, editing, merging, splitting and saving BIOS images
 - Read, write, verify, erase, blank check and operation cancellation
 - Script toolbar for Read + Verify and Erase + Write + Verify workflows
@@ -83,7 +83,7 @@ Một công cụ nạp BIOS hiện đại dành cho kỹ thuật viên phần c�
 
 - Hỗ trợ máy nạp CH341, CH347, XGecu T48, RT809F và RT809H
 - Tự động nhận dạng máy nạp, nhận dạng IC, tìm kiếm catalog IC và thêm IC tùy chỉnh
-- Xem trước và chỉnh sửa buffer dạng hex
+- Hex Editor với nhiều tab Memory, tìm kiếm/thay thế, đi tới offset, copy/paste, fill selection, Hex Marker và trạng thái vùng chọn
 - Nhiều tab Memory để so sánh, chỉnh sửa, merge, split và lưu nhiều BIOS
 - Đọc, ghi, verify, xóa, blank check và hủy thao tác
 - Nút Scripts trên toolbar cho workflow Read + Verify và Erase + Write + Verify
