@@ -155,6 +155,8 @@ Verification:
 - Test targeted cho service moi.
 - Full test + build app.
 
+Status: [OK]
+
 ### Phase 3: BIOS tools orchestration
 
 Deliverable:
