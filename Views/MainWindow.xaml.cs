@@ -19,7 +19,6 @@ namespace NexusProgrammer;
 public partial class MainWindow : Window
 {
     private const string AppName = "Nexus Programmer";
-    private const string ProjectUrl = "https://github.com/mhqb365/NexusProgrammer";
     public static readonly RoutedUICommand NewBufferCommand = new(
         "New",
         nameof(NewBufferCommand),
@@ -2407,10 +2406,10 @@ public partial class MainWindow : Window
 
     private void About_Click(object sender, RoutedEventArgs e)
     {
-        Process.Start(new ProcessStartInfo(ProjectUrl)
+        new AboutWindow
         {
-            UseShellExecute = true
-        });
+            Owner = this
+        }.ShowDialog();
     }
 
     private void Setting_Click(object sender, RoutedEventArgs e)

@@ -6,7 +6,7 @@
 
 English | [Tiếng Việt](#tiếng-việt)
 
-Flashing BIOS application for CH341, CH347, XGecu T48, RT809F and RT809H
+A modern BIOS programming tool for hardware technicians and repair professionals
 
 ## Features
 
@@ -77,7 +77,7 @@ See `THIRD_PARTY_NOTICES.md` and `flashrom-data/COPYING.rst` for more informatio
 
 [English](#english) | Tiếng Việt
 
-Ứng dụng nạp BIOS cho CH341, CH347, XGecu T48, RT809F và RT809H
+Một công cụ nạp BIOS hiện đại dành cho kỹ thuật viên phần cứng và chuyên gia sửa chữa
 
 ## Tính năng
 
