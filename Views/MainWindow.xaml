@@ -292,7 +292,7 @@
             <Setter Property="Foreground" Value="{DynamicResource HexHeaderButtonForegroundBrush}" />
             <Setter Property="Background" Value="{DynamicResource HexHeaderButtonBackgroundBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource HexHeaderButtonBorderBrush}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontWeight" Value="Normal" />
         </Style>
     </Window.Resources>
 
