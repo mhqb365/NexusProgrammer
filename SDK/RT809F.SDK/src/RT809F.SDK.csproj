@@ -12,5 +12,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="samples\**\*.cs" />
+    <Compile Remove="tmp\**\*.cs" />
+    <None Remove="tmp\**\*" />
   </ItemGroup>
 </Project>

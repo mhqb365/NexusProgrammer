@@ -6,9 +6,8 @@
     xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
     xmlns:sys="clr-namespace:System;assembly=mscorlib" Title="Nexus Programmer"
     Icon="/Assets/icon.ico"
-    Height="650"
-    Width="960"
-    MinHeight="650" MinWidth="960" FontFamily="Segoe UI" FontSize="13"
+    Height="720" Width="960" MinHeight="720" MinWidth="960"
+    FontFamily="Segoe UI" FontSize="13"
     Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource TextBrush}">
     <Window.InputBindings>
         <KeyBinding Key="N" Modifiers="Control"
@@ -630,14 +629,18 @@
                     <Button x:Name="HexMarkerButton" DockPanel.Dock="Right"
                         Width="82" Height="20" Margin="2,4,2,4" Padding="0"
                         Style="{StaticResource HexHeaderButtonStyle}"
-                        ToolTip="Hex marker" Click="HexMarkerButton_Click">Hex Marker
-                        <Button.ContextMenu>
+                        ToolTip="Hex marker" Click="HexMarkerButton_Click">Hex Marker <Button.ContextMenu>
                             <ContextMenu x:Name="HexMarkerMenuItem">
                                 <MenuItem Header="Manage" Click="HexMarkerManage_Click" />
                                 <Separator />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
+                    <Button x:Name="HexCompareButton" DockPanel.Dock="Right"
+                        Width="88" Height="20" Margin="2,4,2,4" Padding="0"
+                        Style="{StaticResource HexHeaderButtonStyle}"
+                        ToolTip="Compare two Memory BIOS buffers" Click="HexCompare_Click">Hex
+                        Compare</Button>
                     <Button x:Name="HexReplaceWindowButton" DockPanel.Dock="Right"
                         Width="70" Height="20" Margin="2,4,2,4" Padding="0"
                         Style="{StaticResource HexHeaderButtonStyle}"
