@@ -16,7 +16,7 @@ public static class BiosToolService
         var source = string.IsNullOrWhiteSpace(sourceFileName)
             ? "BIOS"
             : Path.GetFileNameWithoutExtension(sourceFileName);
-        return $"{SafeFileStem(source)}_8FC8_UNLOCKED.bin";
+        return $"{SafeFileStem(source)}_UNLOCKED.bin";
     }
 
     public static string OemUnlockFileNameFor(string sourceFileName, OemPasswordUnlockKind kind)

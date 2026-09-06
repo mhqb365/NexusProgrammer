@@ -22,8 +22,8 @@ internal static class Unlock8Fc8Service
         patchCount += PatchPattern(patched, 0xFD);
 
         return patchCount > 0
-            ? new Unlock8Fc8Result(true, patched, patchCount, $"Patched {patchCount} 8FC8 lock pattern(s).")
-            : new Unlock8Fc8Result(false, source, 0, "8FC8 lock pattern not found.");
+            ? new Unlock8Fc8Result(true, patched, patchCount, $"Patched {patchCount} 8FC8/CF1B/1B58 lock pattern(s).")
+            : new Unlock8Fc8Result(false, source, 0, "8FC8/CF1B/1B58 lock pattern not found.");
     }
 
     private static bool ContainsAtOrBefore(byte[] source, byte[] pattern, int maxOffset)

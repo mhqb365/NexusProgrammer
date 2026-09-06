@@ -1230,7 +1230,7 @@ public partial class MainWindow : Window
     {
         if (_activeMemoryTab is null || _buffer.Length == 0)
         {
-            MessageBox.Show(this, "Select a Memory tab first.", "Unlock DELL 8FC8", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Select a Memory tab first.", "Unlock DELL", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -1238,15 +1238,15 @@ public partial class MainWindow : Window
         var result = Unlock8Fc8Service.Unlock(_buffer);
         if (!result.Success)
         {
-            AppendLog($"Unlock DELL 8FC8 failed: {result.Message}");
-            MessageBox.Show(this, result.Message, "Unlock DELL 8FC8", MessageBoxButton.OK, MessageBoxImage.Warning);
+            AppendLog($"Unlock DELL failed: {result.Message}");
+            MessageBox.Show(this, result.Message, "Unlock DELL", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var fileName = UniqueMemoryTabFileName(BiosToolService.Unlock8Fc8FileNameFor(_activeMemoryTab.SourceFileName));
         var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
         MemoryTabControl.SelectedItem = tab;
-        AppendLog($"Unlock DELL 8FC8 completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.PatchCount} patch(es), {FormatBytes(result.Bios.Length)})");
+        AppendLog($"Unlock DELL completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.PatchCount} patch(es), {FormatBytes(result.Bios.Length)})");
         await SaveCurrentBufferWithDialogAsync(fileName);
     }
 

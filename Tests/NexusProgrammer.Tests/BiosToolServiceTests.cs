@@ -22,7 +22,7 @@ public class BiosToolServiceTests
     [Fact]
     public void Unlock8Fc8FileNameFallsBackToBios()
     {
-        Assert.Equal("BIOS_8FC8_UNLOCKED.bin", BiosToolService.Unlock8Fc8FileNameFor(string.Empty));
+        Assert.Equal("BIOS_UNLOCKED.bin", BiosToolService.Unlock8Fc8FileNameFor(string.Empty));
     }
 
     [Fact]

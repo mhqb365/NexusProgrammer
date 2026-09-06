@@ -621,7 +621,7 @@
                                 <Separator />
                                 <MenuItem Header="Unlock ACER" Click="UnlockAcer_Click" />
                                 <MenuItem Header="Unlock ASUS" Click="UnlockAsus_Click" />
-                                <MenuItem Header="Unlock DELL 8FC8" Click="Unlock8Fc8_Click" />
+                                <MenuItem Header="Unlock DELL" Click="Unlock8Fc8_Click" />
                                 <MenuItem Header="Unlock HP" Click="UnlockHp_Click" />
                             </ContextMenu>
                         </Button.ContextMenu>
