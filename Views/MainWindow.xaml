@@ -6,7 +6,7 @@
     xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
     xmlns:sys="clr-namespace:System;assembly=mscorlib" Title="Nexus Programmer"
     Icon="/Assets/icon.ico"
-    Height="720" Width="960" MinHeight="720" MinWidth="960"
+    Height="660" MinHeight="660" Width="960" MinWidth="960"
     FontFamily="Segoe UI" FontSize="13"
     Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource TextBrush}">
     <Window.InputBindings>
