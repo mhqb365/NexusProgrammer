@@ -8,17 +8,22 @@ public partial class HexSearchWindow : Window
 {
     private readonly Func<string, string, bool, Task<bool>> _searchAsync;
     private readonly Func<string, string, Task<bool>> _searchAllAsync;
+    private readonly bool _closeOnSuccess;
     private bool _formattingHexText;
 
     public HexSearchWindow(
         string mode,
         string query,
         Func<string, string, bool, Task<bool>> searchAsync,
-        Func<string, string, Task<bool>> searchAllAsync)
+        Func<string, string, Task<bool>> searchAllAsync,
+        bool showAllButton = true,
+        bool closeOnSuccess = true)
     {
         InitializeComponent();
         _searchAsync = searchAsync;
         _searchAllAsync = searchAllAsync;
+        _closeOnSuccess = closeOnSuccess;
+        AllButton.Visibility = showAllButton ? Visibility.Visible : Visibility.Collapsed;
         SelectMode(string.IsNullOrWhiteSpace(mode) ? "Text" : mode);
         CurrentQueryBox().Text = query;
         FocusQueryBox(selectAll: true);
@@ -90,7 +95,7 @@ public partial class HexSearchWindow : Window
         SetButtonsEnabled(false);
         try
         {
-            if (await action())
+            if (await action() && _closeOnSuccess)
             {
                 Close();
                 return;

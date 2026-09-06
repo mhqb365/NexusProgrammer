@@ -1308,6 +1308,30 @@ public partial class MainWindow : Window
         RefreshHexMarkerMenu();
     }
 
+    private void HexCompare_Click(object sender, RoutedEventArgs e)
+    {
+        var memories = GetMemoryTabOptions().ToList();
+        if (memories.Count < 2)
+        {
+            MessageBox.Show(this, "Need at least 2 Memory tabs to compare.", "Hex Compare", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var picker = new HexComparePickerWindow(memories)
+        {
+            Owner = this
+        };
+        if (picker.ShowDialog() != true || picker.Bios1 is null || picker.Bios2 is null)
+        {
+            return;
+        }
+
+        new HexCompareWindow(picker.Bios1, picker.Bios2)
+        {
+            Owner = this
+        }.Show();
+    }
+
     private async void HexMarker_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem { Tag: HexMarker marker })

@@ -21,7 +21,9 @@
   <ItemGroup>
     <Compile Remove="samples\**\*.cs" />
     <Compile Remove="T48Sdk\**\*.cs" />
+    <Compile Remove="tmp\**\*.cs" />
     <None Remove="samples\**\*" />
     <None Remove="T48Sdk\**\*" />
+    <None Remove="tmp\**\*" />
   </ItemGroup>
 </Project>
