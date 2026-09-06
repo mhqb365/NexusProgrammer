@@ -44,4 +44,26 @@ public class HexCompareServiceTests
         Assert.Equal(0, HexCompareService.FindFirstEqual(result));
         Assert.Equal(2, HexCompareService.FindLastEqual(result));
     }
+
+    [Fact]
+    public void FindEqualOffsetsHandlesNoDifferences()
+    {
+        var result = new HexCompareResult(10, []);
+
+        Assert.Equal(0, HexCompareService.FindFirstEqual(result));
+        Assert.Equal(9, HexCompareService.FindLastEqual(result));
+        Assert.Equal(6, HexCompareService.FindNextEqual(result, 5));
+        Assert.Equal(4, HexCompareService.FindPreviousEqual(result, 5));
+    }
+
+    [Fact]
+    public void FindEqualOffsetsHandlesAllDifferences()
+    {
+        var result = new HexCompareResult(4, [0, 1, 2, 3]);
+
+        Assert.Equal(-1, HexCompareService.FindFirstEqual(result));
+        Assert.Equal(-1, HexCompareService.FindLastEqual(result));
+        Assert.Equal(-1, HexCompareService.FindNextEqual(result, 1));
+        Assert.Equal(-1, HexCompareService.FindPreviousEqual(result, 1));
+    }
 }

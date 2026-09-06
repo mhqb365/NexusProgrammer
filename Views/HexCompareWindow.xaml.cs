@@ -62,44 +62,32 @@ public partial class HexCompareWindow : Window
     private void PreviousDiff_Click(object sender, RoutedEventArgs e)
     {
         var offset = HexCompareService.FindPreviousDifference(_result, _currentOffset);
-        if (offset >= 0)
-        {
-            ScrollToOffset(offset);
-        }
+        ScrollToFoundOffset(offset, "No difference found.");
     }
 
     private void NextDiff_Click(object sender, RoutedEventArgs e)
     {
         var offset = HexCompareService.FindNextDifference(_result, _currentOffset);
-        if (offset >= 0)
-        {
-            ScrollToOffset(offset);
-        }
+        ScrollToFoundOffset(offset, "No difference found.");
     }
 
     private void FirstDiff_Click(object sender, RoutedEventArgs e)
     {
-        if (_result.DifferenceOffsets.Count > 0)
-        {
-            ScrollToOffset(_result.DifferenceOffsets[0]);
-        }
+        ScrollToFoundOffset(_result.DifferenceOffsets.Count > 0 ? _result.DifferenceOffsets[0] : -1, "No difference found.");
     }
 
     private void LastDiff_Click(object sender, RoutedEventArgs e)
     {
-        if (_result.DifferenceOffsets.Count > 0)
-        {
-            ScrollToOffset(_result.DifferenceOffsets[^1]);
-        }
+        ScrollToFoundOffset(_result.DifferenceOffsets.Count > 0 ? _result.DifferenceOffsets[^1] : -1, "No difference found.");
     }
 
-    private void FirstEqual_Click(object sender, RoutedEventArgs e) => ScrollToFoundOffset(HexCompareService.FindFirstEqual(_result));
+    private void FirstEqual_Click(object sender, RoutedEventArgs e) => ScrollToFoundOffset(HexCompareService.FindFirstEqual(_result), "No equal offset found.");
 
-    private void PreviousEqual_Click(object sender, RoutedEventArgs e) => ScrollToFoundOffset(HexCompareService.FindPreviousEqual(_result, _currentOffset));
+    private void PreviousEqual_Click(object sender, RoutedEventArgs e) => ScrollToFoundOffset(HexCompareService.FindPreviousEqual(_result, _currentOffset), "No equal offset found.");
 
-    private void NextEqual_Click(object sender, RoutedEventArgs e) => ScrollToFoundOffset(HexCompareService.FindNextEqual(_result, _currentOffset));
+    private void NextEqual_Click(object sender, RoutedEventArgs e) => ScrollToFoundOffset(HexCompareService.FindNextEqual(_result, _currentOffset), "No equal offset found.");
 
-    private void LastEqual_Click(object sender, RoutedEventArgs e) => ScrollToFoundOffset(HexCompareService.FindLastEqual(_result));
+    private void LastEqual_Click(object sender, RoutedEventArgs e) => ScrollToFoundOffset(HexCompareService.FindLastEqual(_result), "No equal offset found.");
 
     private void Search_Click(object sender, RoutedEventArgs e)
     {
@@ -158,12 +146,15 @@ public partial class HexCompareWindow : Window
         return Task.FromResult(true);
     }
 
-    private void ScrollToFoundOffset(int offset)
+    private void ScrollToFoundOffset(int offset, string notFoundMessage)
     {
         if (offset >= 0)
         {
             ScrollToOffset(offset);
+            return;
         }
+
+        MessageBox.Show(this, notFoundMessage, "Hex Compare", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     private bool TryBuildSearchPattern(string mode, string query, out byte[] pattern, out bool asciiText)

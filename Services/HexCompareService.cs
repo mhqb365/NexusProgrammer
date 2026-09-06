@@ -3,7 +3,6 @@ namespace NexusProgrammer;
 public sealed record HexCompareResult(int Length, IReadOnlyList<int> DifferenceOffsets)
 {
     public int DifferenceCount => DifferenceOffsets.Count;
-    public IReadOnlyList<int> EqualOffsets => Enumerable.Range(0, Length).Except(DifferenceOffsets).ToList();
 }
 
 public static class HexCompareService
@@ -32,7 +31,8 @@ public static class HexCompareService
             return -1;
         }
 
-        return result.DifferenceOffsets.FirstOrDefault(offset => offset > currentOffset, result.DifferenceOffsets[0]);
+        var index = UpperBound(result.DifferenceOffsets, currentOffset);
+        return index < result.DifferenceOffsets.Count ? result.DifferenceOffsets[index] : result.DifferenceOffsets[0];
     }
 
     public static int FindPreviousDifference(HexCompareResult result, int currentOffset)
@@ -42,54 +42,129 @@ public static class HexCompareService
             return -1;
         }
 
-        for (var i = result.DifferenceOffsets.Count - 1; i >= 0; i--)
-        {
-            if (result.DifferenceOffsets[i] < currentOffset)
-            {
-                return result.DifferenceOffsets[i];
-            }
-        }
-
-        return result.DifferenceOffsets[^1];
+        var index = LowerBound(result.DifferenceOffsets, currentOffset) - 1;
+        return index >= 0 ? result.DifferenceOffsets[index] : result.DifferenceOffsets[^1];
     }
 
     public static int FindFirstEqual(HexCompareResult result) =>
-        result.EqualOffsets.Count == 0 ? -1 : result.EqualOffsets[0];
+        FindFirstEqualInRange(result, 0, result.Length - 1);
 
     public static int FindLastEqual(HexCompareResult result) =>
-        result.EqualOffsets.Count == 0 ? -1 : result.EqualOffsets[^1];
+        FindLastEqualInRange(result, 0, result.Length - 1);
 
-    public static int FindNextEqual(HexCompareResult result, int currentOffset) =>
-        FindNext(result.EqualOffsets, currentOffset);
-
-    public static int FindPreviousEqual(HexCompareResult result, int currentOffset) =>
-        FindPrevious(result.EqualOffsets, currentOffset);
-
-    private static int FindNext(IReadOnlyList<int> offsets, int currentOffset)
+    public static int FindNextEqual(HexCompareResult result, int currentOffset)
     {
-        if (offsets.Count == 0)
-        {
-            return -1;
-        }
-
-        return offsets.FirstOrDefault(offset => offset > currentOffset, offsets[0]);
+        var offset = FindFirstEqualInRange(result, currentOffset + 1, result.Length - 1);
+        return offset >= 0 ? offset : FindFirstEqualInRange(result, 0, currentOffset);
     }
 
-    private static int FindPrevious(IReadOnlyList<int> offsets, int currentOffset)
+    public static int FindPreviousEqual(HexCompareResult result, int currentOffset)
     {
-        if (offsets.Count == 0)
+        var offset = FindLastEqualInRange(result, 0, currentOffset - 1);
+        return offset >= 0 ? offset : FindLastEqualInRange(result, currentOffset, result.Length - 1);
+    }
+
+    private static int FindFirstEqualInRange(HexCompareResult result, int start, int end)
+    {
+        if (result.Length == 0 || start > end)
         {
             return -1;
         }
 
-        for (var i = offsets.Count - 1; i >= 0; i--)
+        var candidate = Math.Max(0, start);
+        end = Math.Min(end, result.Length - 1);
+        for (var i = LowerBound(result.DifferenceOffsets, candidate); i < result.DifferenceOffsets.Count; i++)
         {
-            if (offsets[i] < currentOffset)
+            var diff = result.DifferenceOffsets[i];
+            if (diff > end)
             {
-                return offsets[i];
+                break;
+            }
+
+            if (diff > candidate)
+            {
+                return candidate;
+            }
+
+            candidate++;
+            if (candidate > end)
+            {
+                return -1;
             }
         }
 
-        return offsets[^1];
+        return candidate <= end ? candidate : -1;
+    }
+
+    private static int FindLastEqualInRange(HexCompareResult result, int start, int end)
+    {
+        if (result.Length == 0 || start > end)
+        {
+            return -1;
+        }
+
+        start = Math.Max(0, start);
+        var candidate = Math.Min(end, result.Length - 1);
+        for (var i = UpperBound(result.DifferenceOffsets, candidate) - 1; i >= 0; i--)
+        {
+            var diff = result.DifferenceOffsets[i];
+            if (diff < start)
+            {
+                break;
+            }
+
+            if (diff < candidate)
+            {
+                return candidate;
+            }
+
+            candidate--;
+            if (candidate < start)
+            {
+                return -1;
+            }
+        }
+
+        return candidate >= start ? candidate : -1;
+    }
+
+    private static int LowerBound(IReadOnlyList<int> offsets, int value)
+    {
+        var left = 0;
+        var right = offsets.Count;
+        while (left < right)
+        {
+            var middle = left + (right - left) / 2;
+            if (offsets[middle] < value)
+            {
+                left = middle + 1;
+            }
+            else
+            {
+                right = middle;
+            }
+        }
+
+        return left;
+    }
+
+    private static int UpperBound(IReadOnlyList<int> offsets, int value)
+    {
+        var left = 0;
+        var right = offsets.Count;
+        while (left < right)
+        {
+            var middle = left + (right - left) / 2;
+            if (offsets[middle] <= value)
+            {
+                left = middle + 1;
+            }
+            else
+            {
+                right = middle;
+            }
+        }
+
+        return left;
     }
 }
