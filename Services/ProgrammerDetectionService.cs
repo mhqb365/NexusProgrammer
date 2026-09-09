@@ -35,7 +35,7 @@ internal static class ProgrammerDetectionService
     {
         var ch347UsbDetected = WchUsbDeviceDetector.HasPresentDevice("VID_1A86", "PID_55DA", "PID_55DB");
         var ch341UsbDetected = WchUsbDeviceDetector.HasPresentDevice("VID_1A86", "PID_5512");
-        if (ch347UsbDetected || ch341UsbDetected)
+        if (WchUsbDeviceDetector.HasPresentVendor("VID_1A86"))
         {
             return (
                 ch347UsbDetected && Ch347NativeProgrammer.IsAvailable && Ch347NativeProgrammer.CanOpenDevice(),
@@ -43,7 +43,7 @@ internal static class ProgrammerDetectionService
         }
 
         var ch347Fallback = Ch347NativeProgrammer.IsAvailable && Ch347NativeProgrammer.CanOpenDevice();
-        var ch341Fallback = !ch347Fallback && ChNativeProgrammer.IsAvailable && ChNativeProgrammer.CanOpenDevice();
+        var ch341Fallback = ChNativeProgrammer.IsAvailable && ChNativeProgrammer.CanOpenDevice();
         return (ch347Fallback, ch341Fallback);
     }
 }

@@ -1003,11 +1003,13 @@ internal static class WchUsbDeviceDetector
 
     public static bool HasPresentDevice(string vid, params string[] pids)
     {
-        var hardwareIds = EnumeratePresentHardwareIds();
-        return hardwareIds.Any(id =>
+        return EnumeratePresentHardwareIds().Any(id =>
             id.Contains(vid, StringComparison.OrdinalIgnoreCase) &&
             pids.Any(pid => id.Contains(pid, StringComparison.OrdinalIgnoreCase)));
     }
+
+    public static bool HasPresentVendor(string vid) =>
+        EnumeratePresentHardwareIds().Any(id => id.Contains(vid, StringComparison.OrdinalIgnoreCase));
 
     private static IEnumerable<string> EnumeratePresentHardwareIds()
     {
