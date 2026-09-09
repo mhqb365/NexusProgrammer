@@ -7,6 +7,7 @@ namespace NexusProgrammer;
 public sealed class Ch347NativeProgrammer : IChipProgrammer
 {
     private const int DeviceIndex = 0;
+    private const int MaxDeviceCount = 16;
     private const uint ChipSelect = 0x80;
     private const int ReadChunkSize = 256 * 1024;
     private const int I2cReadChunkSize = 512;
@@ -23,14 +24,33 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
     public static bool CanOpenDevice()
     {
-        var handle = NativeMethods.CH347OpenDevice(DeviceIndex);
+        for (var index = 0; index < MaxDeviceCount; index++)
+        {
+            if (CanOpenDevice(index))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool CanOpenDevice(int index)
+    {
+        var handle = NativeMethods.CH347OpenDevice(index);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
             return false;
         }
 
-        NativeMethods.CH347CloseDevice(DeviceIndex);
-        return true;
+        try
+        {
+            return true;
+        }
+        finally
+        {
+            NativeMethods.CH347CloseDevice(index);
+        }
     }
 
     public async Task<bool> DetectAsync(IProgress<int> progress, CancellationToken cancellationToken = default)
@@ -563,6 +583,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 public sealed class ChNativeProgrammer : IChipProgrammer
 {
     private const int DeviceIndex = 0;
+    private const int MaxDeviceCount = 16;
     private const string ChNativeDll = "CH" + "341DLLA64.DLL";
     private const uint StreamMode = 0x81;
     private const uint ChipSelect = 0x80;
@@ -578,14 +599,33 @@ public sealed class ChNativeProgrammer : IChipProgrammer
 
     public static bool CanOpenDevice()
     {
-        var handle = NativeMethods.CHOpenDevice(DeviceIndex);
+        for (var index = 0; index < MaxDeviceCount; index++)
+        {
+            if (CanOpenDevice(index))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool CanOpenDevice(int index)
+    {
+        var handle = NativeMethods.CHOpenDevice(index);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
             return false;
         }
 
-        NativeMethods.CHCloseDevice(DeviceIndex);
-        return true;
+        try
+        {
+            return true;
+        }
+        finally
+        {
+            NativeMethods.CHCloseDevice(index);
+        }
     }
 
     public async Task<bool> DetectAsync(IProgress<int> progress, CancellationToken cancellationToken = default)
