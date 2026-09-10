@@ -901,6 +901,7 @@ public partial class MainWindow : Window
                 progress,
                 AppendLog,
                 cancellationToken));
+            SetActiveMemorySourceName(ChipDumpFileName(chip));
             RebuildRows();
             UpdateStatus();
             readCompleted = true;
@@ -2285,6 +2286,25 @@ public partial class MainWindow : Window
             : Path.GetFileName(sourceFile);
     }
 
+    private void SetActiveMemorySourceName(string fileName)
+    {
+        if (_activeMemoryTab is not null)
+        {
+            _activeMemoryTab.SourceFileName = fileName;
+        }
+    }
+
+    private static string ChipDumpFileName(ChipProfile chip)
+    {
+        var name = chip.Name;
+        foreach (var invalid in Path.GetInvalidFileNameChars())
+        {
+            name = name.Replace(invalid, '_');
+        }
+
+        return $"{name}.bin";
+    }
+
     private string UniqueMemoryTabFileName(string fileName)
     {
         var directory = SuggestedInitialDirectory();
@@ -2446,6 +2466,7 @@ public partial class MainWindow : Window
                 data =>
                 {
                     SetActiveBuffer(data);
+                    SetActiveMemorySourceName(ChipDumpFileName(chip));
                     RebuildRows();
                     UpdateStatus();
                 },

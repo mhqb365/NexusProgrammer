@@ -6,15 +6,16 @@ namespace NexusProgrammer;
 
 public sealed class Ch347NativeProgrammer : IChipProgrammer
 {
-    private const int DeviceIndex = 0;
+    private static int _deviceIndex = 0;
     private const int MaxDeviceCount = 16;
     private const uint ChipSelect = 0x80;
-    private const int ReadChunkSize = 256 * 1024;
+    private const int ReadChunkSize = 3840;
     private const int I2cReadChunkSize = 512;
     private const int WriteReadyTimeoutMs = 500;
     private const int SpiInitializationDelayMs = 50;
     private const int ReadIdMaxAttempts = 3;
     private const int ReadIdRetryDelayMs = 10;
+    private static readonly string[] SupportedPids = ["55DA", "55DB", "55DD", "55DE", "55E7"];
 
     public string Name => "CH347 native DLL";
 
@@ -24,10 +25,23 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
     public static bool CanOpenDevice()
     {
+        if (TryFindDeviceIndex(out var index))
+        {
+            _deviceIndex = index;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryFindDeviceIndex(out int deviceIndex)
+    {
+        deviceIndex = 0;
         for (var index = 0; index < MaxDeviceCount; index++)
         {
-            if (CanOpenDevice(index))
+            if (IsUsableDevice(index))
             {
+                deviceIndex = index;
                 return true;
             }
         }
@@ -35,7 +49,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         return false;
     }
 
-    private static bool CanOpenDevice(int index)
+    private static bool IsUsableDevice(int index)
     {
         var handle = NativeMethods.CH347OpenDevice(index);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
@@ -43,9 +57,15 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             return false;
         }
 
+        var metadataValid = false;
         try
         {
-            return true;
+            metadataValid = TryGetDeviceInfo(index, out var info) && IsValidCh347Device(info);
+            return metadataValid && NativeMethods.CH347SPI_Init(index, in SpiConfig.Default);
+        }
+        catch
+        {
+            return false;
         }
         finally
         {
@@ -58,7 +78,8 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         cancellationToken.ThrowIfCancellationRequested();
         progress.Report(10);
         await Task.Delay(1, cancellationToken);
-        var handle = NativeMethods.CH347OpenDevice(DeviceIndex);
+        var index = _deviceIndex;
+        var handle = NativeMethods.CH347OpenDevice(index);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
             progress.Report(100);
@@ -67,13 +88,14 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
         try
         {
-            var ok = NativeMethods.CH347SPI_Init(DeviceIndex, in SpiConfig.Default);
+            var ok = TryGetDeviceInfo(index, out var info) && IsValidCh347Device(info) &&
+                NativeMethods.CH347SPI_Init(index, in SpiConfig.Default);
             progress.Report(100);
             return ok;
         }
         finally
         {
-            NativeMethods.CH347CloseDevice(DeviceIndex);
+            NativeMethods.CH347CloseDevice(index);
         }
     }
 
@@ -136,11 +158,10 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             var count = Math.Min(ReadChunkSize, length - done);
             var address = startAddress + done;
             var addressBytes = Uses4ByteAddress(chip, address) ? 4 : 3;
-            var command = new byte[1 + addressBytes + 1];
-            WriteAddress(command, 0, 0x0B, 0x0C, address, addressBytes);
-            command[^1] = 0x00;
-            var response = SpiRead(command, count);
-            Buffer.BlockCopy(response, 0, result, done, count);
+            var command = new byte[count + 1 + addressBytes];
+            WriteAddress(command, 0, 0x03, 0x13, address, addressBytes);
+            var response = SpiTransfer(command);
+            Buffer.BlockCopy(response, command.Length - count, result, done, count);
             done += count;
             progress.Report(ProgressPercent(done, length));
         }
@@ -248,15 +269,20 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
     private static Ch347Device OpenDevice()
     {
-        var handle = NativeMethods.CH347OpenDevice(DeviceIndex);
+        if (!IsUsableDevice(_deviceIndex) && !TryFindDeviceIndex(out _deviceIndex))
+        {
+            throw new InvalidOperationException("Cannot find a usable CH347 SPI/I2C interface.");
+        }
+
+        var handle = NativeMethods.CH347OpenDevice(_deviceIndex);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
         {
             throw new InvalidOperationException("Cannot open CH347. Check USB connection, WCH CH347 driver, and that no other programmer software is using it.");
         }
 
-        if (!NativeMethods.CH347SPI_Init(DeviceIndex, SpiConfig.Default))
+        if (!NativeMethods.CH347SPI_Init(_deviceIndex, SpiConfig.Default))
         {
-            NativeMethods.CH347CloseDevice(DeviceIndex);
+            NativeMethods.CH347CloseDevice(_deviceIndex);
             throw new InvalidOperationException("Cannot configure CH347 SPI controller.");
         }
 
@@ -264,7 +290,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         // after the controller changes the SPI pins and chip-select state.
         Thread.Sleep(SpiInitializationDelayMs);
 
-        return new Ch347Device();
+        return new Ch347Device(_deviceIndex);
     }
 
     private static bool IsInvalidJedecId(byte[] id) =>
@@ -273,9 +299,9 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
     private static byte[] SpiTransfer(byte[] buffer)
     {
         var io = buffer.ToArray();
-        if (!NativeMethods.CH347StreamSPI4(DeviceIndex, ChipSelect, (uint)io.Length, io))
+        if (!NativeMethods.CH347StreamSPI4(_deviceIndex, ChipSelect, (uint)io.Length, io))
         {
-            if (!NativeMethods.CH347StreamSPI4(DeviceIndex, 0, (uint)io.Length, io))
+            if (!NativeMethods.CH347StreamSPI4(_deviceIndex, 0, (uint)io.Length, io))
             {
                 throw new IOException("CH347 SPI transfer failed.");
             }
@@ -289,7 +315,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         var io = new byte[command.Length + readLength];
         Buffer.BlockCopy(command, 0, io, 0, command.Length);
         var length = (uint)readLength;
-        if (!NativeMethods.CH347SPI_Read(DeviceIndex, ChipSelect, (uint)command.Length, ref length, io))
+        if (!NativeMethods.CH347SPI_Read(_deviceIndex, ChipSelect, (uint)command.Length, ref length, io))
         {
             throw new IOException("CH347 SPI read failed.");
         }
@@ -316,7 +342,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             var write = BuildI2cAddressWriteBuffer(chip, address);
             var read = new byte[count];
 
-            if (!NativeMethods.CH347StreamI2C(DeviceIndex, (uint)write.Length, write, (uint)read.Length, read))
+            if (!NativeMethods.CH347StreamI2C(_deviceIndex, (uint)write.Length, write, (uint)read.Length, read))
             {
                 throw new IOException($"CH347 I2C read failed at 0x{address:X6}.");
             }
@@ -349,7 +375,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
             var write = BuildI2cPageWriteBuffer(chip, address, data, done, count);
 
-            if (!NativeMethods.CH347StreamI2C(DeviceIndex, (uint)write.Length, write, 0, Array.Empty<byte>()))
+            if (!NativeMethods.CH347StreamI2C(_deviceIndex, (uint)write.Length, write, 0, Array.Empty<byte>()))
             {
                 throw new IOException($"CH347 I2C write failed at 0x{address:X6}.");
             }
@@ -493,9 +519,39 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         }
     }
 
+    private static bool TryGetDeviceInfo(int index, out Ch347DeviceInfo info)
+    {
+        info = default;
+        try
+        {
+            return NativeMethods.CH347GetDeviceInfor(index, ref info) != 0;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsValidCh347Device(Ch347DeviceInfo info)
+    {
+        var deviceId = info.DeviceIdText;
+        var hasWchVid = deviceId.Contains("VID_1A86", StringComparison.OrdinalIgnoreCase);
+        var supportedPid = SupportedPids.Any(pid => deviceId.Contains($"PID_{pid}", StringComparison.OrdinalIgnoreCase));
+        var supportedFunction = info.FuncType is 1 or 2 || info.ChipMode is 1 or 2 or 4;
+        var hasDataEndpoint = info.DataUpEndp != 0 && info.DataDnEndp != 0;
+        return hasWchVid && supportedPid && supportedFunction && hasDataEndpoint;
+    }
+
     private sealed class Ch347Device : IDisposable
     {
-        public void Dispose() => NativeMethods.CH347CloseDevice(DeviceIndex);
+        private readonly int _index;
+
+        public Ch347Device(int index)
+        {
+            _index = index;
+        }
+
+        public void Dispose() => NativeMethods.CH347CloseDevice(_index);
     }
 
     private static class NativeMethods
@@ -506,6 +562,9 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347CloseDevice", CallingConvention = CallingConvention.Winapi)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CH347CloseDevice(int index);
+
+        [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347GetDeviceInfor", CallingConvention = CallingConvention.Winapi)]
+        public static extern uint CH347GetDeviceInfor(int index, ref Ch347DeviceInfo deviceInfo);
 
         [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347StreamSPI4", CallingConvention = CallingConvention.Winapi)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -522,6 +581,46 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         [DllImport("CH347DLLA64.DLL", EntryPoint = "CH347StreamI2C", CallingConvention = CallingConvention.Winapi)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CH347StreamI2C(int index, uint writeLength, byte[] writeBuffer, uint readLength, byte[] readBuffer);
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    private struct Ch347DeviceInfo
+    {
+        public byte Index;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string DevicePath;
+
+        public byte UsbClass;
+        public byte FuncType;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string DeviceId;
+
+        public byte ChipMode;
+        public IntPtr DeviceHandle;
+        public ushort BulkOutEndpMaxSize;
+        public ushort BulkInEndpMaxSize;
+        public byte UsbSpeedType;
+        public byte Ch347IfNum;
+        public byte DataUpEndp;
+        public byte DataDnEndp;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string ProductString;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string ManufacturerString;
+
+        public uint WriteTimeout;
+        public uint ReadTimeout;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string FuncDescStr;
+
+        public byte FirmwareVer;
+
+        public string DeviceIdText => DeviceId ?? string.Empty;
     }
 
     [StructLayout(LayoutKind.Sequential)]

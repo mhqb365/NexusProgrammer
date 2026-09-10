@@ -36,7 +36,7 @@ internal static class ProgrammerDetectionService
     private static (bool Ch347Detected, bool Ch341Detected) DetectWchProgrammers()
     {
         var wchUsbDetected = WchUsbDeviceDetector.HasPresentVendor("VID_1A86");
-        var ch347UsbDetected = WchUsbDeviceDetector.HasPresentDevice("VID_1A86", "PID_55DA", "PID_55DB", "PID_55DD");
+        var ch347UsbDetected = WchUsbDeviceDetector.HasPresentDevice("VID_1A86", "PID_55DA", "PID_55DB", "PID_55DD", "PID_55DE", "PID_55E7");
         var ch341UsbDetected = WchUsbDeviceDetector.HasPresentDevice("VID_1A86", "PID_5512");
         var ch347BackendDetected = Ch347NativeProgrammer.IsAvailable && Ch347NativeProgrammer.CanOpenDevice();
         var ch341BackendDetected = ChNativeProgrammer.IsAvailable && ChNativeProgrammer.CanOpenDevice();
