@@ -1249,7 +1249,20 @@ public partial class MainWindow : Window
         }
 
         var sourceLabel = MemoryTabDisplayName(_activeMemoryTab);
-        var result = Unlock8Fc8Service.Unlock(_buffer);
+        var sourceBuffer = _buffer;
+        Unlock8Fc8Result? result = null;
+        await RunOperationAsync("Unlock DELL", sourceBuffer.Length, async (progress, cancellationToken) =>
+        {
+            progress.Report(5);
+            result = await Task.Run(() => Unlock8Fc8Service.Unlock(sourceBuffer), cancellationToken);
+            progress.Report(100);
+        }, logLifecycle: true);
+
+        if (result is null)
+        {
+            return;
+        }
+
         if (!result.Success)
         {
             AppendLog($"Unlock DELL failed: {result.Message}");
@@ -1282,7 +1295,20 @@ public partial class MainWindow : Window
         }
 
         var sourceLabel = MemoryTabDisplayName(_activeMemoryTab);
-        var result = OemPasswordUnlockService.Unlock(_buffer, kind);
+        var sourceBuffer = _buffer;
+        OemPasswordUnlockResult? result = null;
+        await RunOperationAsync(title, sourceBuffer.Length, async (progress, cancellationToken) =>
+        {
+            progress.Report(5);
+            result = await Task.Run(() => OemPasswordUnlockService.Unlock(sourceBuffer, kind), cancellationToken);
+            progress.Report(100);
+        }, logLifecycle: true);
+
+        if (result is null)
+        {
+            return;
+        }
+
         if (!result.Success)
         {
             AppendLog($"{title} failed: {result.Message}");
