@@ -93,6 +93,7 @@ public partial class MainWindow : Window
     private bool _isBusy;
     private bool _isApplyingDetectedChip;
     private bool _isSearching;
+    private bool _isProbingProgrammer;
     private bool _updatingHexScrollBar;
     private CancellationTokenSource? _operationCts;
     private HexSearchWindow? _hexSearchWindow;
@@ -692,8 +693,21 @@ public partial class MainWindow : Window
 
     private async Task ProbeProgrammerAsync(bool logWhenChanged, bool forceLog = false)
     {
-        await Task.Yield();
-        var detection = ProgrammerDetectionService.DetectAvailable();
+        if (_isProbingProgrammer)
+        {
+            return;
+        }
+
+        _isProbingProgrammer = true;
+        ProgrammerDetection detection;
+        try
+        {
+            detection = await Task.Run(ProgrammerDetectionService.DetectAvailable);
+        }
+        finally
+        {
+            _isProbingProgrammer = false;
+        }
 
         UpdateProgrammerOptionStates(detection, logWhenChanged);
         ApplyProgrammerDetection(detection, logWhenChanged, forceLog);
@@ -1308,7 +1322,7 @@ public partial class MainWindow : Window
         RefreshHexMarkerMenu();
     }
 
-    private void HexCompare_Click(object sender, RoutedEventArgs e)
+    private async void HexCompare_Click(object sender, RoutedEventArgs e)
     {
         var memories = GetMemoryTabOptions().ToList();
         if (memories.Count < 2)
@@ -1326,10 +1340,24 @@ public partial class MainWindow : Window
             return;
         }
 
-        new HexCompareWindow(picker.Bios1, picker.Bios2)
+        OperationStatusText.Text = "Comparing";
+        OperationProgress.IsIndeterminate = true;
+        try
         {
-            Owner = this
-        }.Show();
+            var first = picker.Bios1;
+            var second = picker.Bios2;
+            var result = await Task.Run(() => HexCompareService.Compare(first.Buffer, second.Buffer));
+            new HexCompareWindow(first, second, result)
+            {
+                Owner = this
+            }.Show();
+        }
+        finally
+        {
+            OperationProgress.IsIndeterminate = false;
+            OperationProgress.Value = 0;
+            OperationStatusText.Text = "Ready";
+        }
     }
 
     private async void HexMarker_Click(object sender, RoutedEventArgs e)
@@ -2247,7 +2275,7 @@ public partial class MainWindow : Window
         return BiosToolService.ClearMeFileNameFor(memory, CurrentChip().Name);
     }
 
-    private void SaveLog_Click(object sender, RoutedEventArgs e)
+    private async void SaveLog_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(LogBox.Text))
         {
@@ -2265,7 +2293,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        File.WriteAllText(dialog.FileName, LogBox.Text, Encoding.UTF8);
+        await File.WriteAllTextAsync(dialog.FileName, LogBox.Text, Encoding.UTF8);
         AppendLog($"Log saved: {dialog.FileName}");
     }
 

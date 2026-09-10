@@ -14,6 +14,13 @@ public sealed class HexCompareView : FrameworkElement
     private const double PreferredAsciiX = 506;
     private const double ByteCellWidth = 24;
     private const double CharCellWidth = 8;
+    private static readonly Brush BackgroundBrush = FrozenBrush(Color.FromRgb(252, 253, 255));
+    private static readonly Brush DiffBrush = FrozenBrush(Color.FromRgb(255, 218, 218));
+    private static readonly Brush MirrorSelectionBrush = FrozenBrush(Color.FromRgb(235, 250, 253));
+    private static readonly Brush SelectionBrush = FrozenBrush(Color.FromRgb(220, 246, 252));
+    private static readonly Brush CurrentBrush = FrozenBrush(Color.FromRgb(190, 232, 248));
+    private static readonly Pen CurrentPen = FrozenPen(Brushes.DeepSkyBlue, 1);
+    private static readonly Typeface TextTypeface = new("Consolas");
 
     private byte[] _buffer = [];
     private HashSet<int> _diffOffsets = [];
@@ -122,14 +129,9 @@ public sealed class HexCompareView : FrameworkElement
 
     protected override void OnRender(DrawingContext dc)
     {
-        dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(252, 253, 255)), null, new Rect(0, 0, ActualWidth, ActualHeight));
+        dc.DrawRectangle(BackgroundBrush, null, new Rect(0, 0, ActualWidth, ActualHeight));
         var addressBrush = Brushes.Blue;
         var textBrush = Brushes.Black;
-        var diffBrush = new SolidColorBrush(Color.FromRgb(255, 218, 218));
-        var mirrorSelectionBrush = new SolidColorBrush(Color.FromRgb(235, 250, 253));
-        var selectionBrush = new SolidColorBrush(Color.FromRgb(220, 246, 252));
-        var currentBrush = new SolidColorBrush(Color.FromRgb(190, 232, 248));
-        var currentPen = new Pen(Brushes.DeepSkyBlue, 1);
         var asciiX = Math.Min(PreferredAsciiX, Math.Max(HexX + BytesPerLine * ByteCellWidth + 24, ActualWidth - 150));
         var selectionStart = Math.Min(_selectionAnchor, _selectionEnd);
         var selectionEnd = Math.Max(_selectionAnchor, _selectionEnd);
@@ -150,25 +152,25 @@ public sealed class HexCompareView : FrameworkElement
                 var x = HexX + i * ByteCellWidth;
                 if (_diffOffsets.Contains(byteOffset))
                 {
-                    dc.DrawRectangle(diffBrush, null, new Rect(x - 2, y, 20, LineHeight));
-                    dc.DrawRectangle(diffBrush, null, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
+                    dc.DrawRectangle(DiffBrush, null, new Rect(x - 2, y, 20, LineHeight));
+                    dc.DrawRectangle(DiffBrush, null, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
                 }
                 if (IsMirrorSelected(byteOffset))
                 {
-                    dc.DrawRectangle(mirrorSelectionBrush, null, new Rect(x - 2, y, 20, LineHeight));
-                    dc.DrawRectangle(mirrorSelectionBrush, null, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
+                    dc.DrawRectangle(MirrorSelectionBrush, null, new Rect(x - 2, y, 20, LineHeight));
+                    dc.DrawRectangle(MirrorSelectionBrush, null, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
                 }
                 if (byteOffset >= selectionStart && byteOffset <= selectionEnd)
                 {
-                    dc.DrawRectangle(selectionBrush, null, new Rect(x - 2, y, 20, LineHeight));
-                    dc.DrawRectangle(selectionBrush, null, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
+                    dc.DrawRectangle(SelectionBrush, null, new Rect(x - 2, y, 20, LineHeight));
+                    dc.DrawRectangle(SelectionBrush, null, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
                 }
                 if (byteOffset == _currentOffset)
                 {
-                    dc.DrawRectangle(currentBrush, null, new Rect(x - 2, y, 20, LineHeight));
-                    dc.DrawRectangle(currentBrush, null, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
-                    dc.DrawRectangle(null, currentPen, new Rect(x - 2, y, 20, LineHeight));
-                    dc.DrawRectangle(null, currentPen, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
+                    dc.DrawRectangle(CurrentBrush, null, new Rect(x - 2, y, 20, LineHeight));
+                    dc.DrawRectangle(CurrentBrush, null, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
+                    dc.DrawRectangle(null, CurrentPen, new Rect(x - 2, y, 20, LineHeight));
+                    dc.DrawRectangle(null, CurrentPen, new Rect(asciiX + i * CharCellWidth - 1, y, CharCellWidth, LineHeight));
                 }
 
                 DrawText(dc, _buffer[byteOffset].ToString("X2", CultureInfo.InvariantCulture), x, y, textBrush);
@@ -248,8 +250,22 @@ public sealed class HexCompareView : FrameworkElement
     private static void DrawText(DrawingContext dc, string text, double x, double y, Brush brush)
     {
         var formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            new Typeface("Consolas"), 12, brush, 1.0);
+            TextTypeface, 12, brush, 1.0);
         dc.DrawText(formatted, new Point(x, y));
+    }
+
+    private static SolidColorBrush FrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Pen FrozenPen(Brush brush, double thickness)
+    {
+        var pen = new Pen(brush, thickness);
+        pen.Freeze();
+        return pen;
     }
 
     private bool TryHitTestOffset(Point p, out int offset)

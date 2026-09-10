@@ -14,11 +14,16 @@ public partial class HexCompareWindow : Window
     private int _currentOffset;
 
     public HexCompareWindow(MemoryBufferOption first, MemoryBufferOption second)
+        : this(first, second, HexCompareService.Compare(first.Buffer, second.Buffer))
+    {
+    }
+
+    public HexCompareWindow(MemoryBufferOption first, MemoryBufferOption second, HexCompareResult result)
     {
         InitializeComponent();
         _first = first;
         _second = second;
-        _result = HexCompareService.Compare(first.Buffer, second.Buffer);
+        _result = result;
         FirstHeader = $"{first.Label} - {DisplayName(first)}";
         SecondHeader = $"{second.Label} - {DisplayName(second)}";
         DataContext = this;
@@ -110,40 +115,41 @@ public partial class HexCompareWindow : Window
         }
     }
 
-    private Task<bool> SearchAsync(string mode, string query, bool forward)
+    private async Task<bool> SearchAsync(string mode, string query, bool forward)
     {
         if (!TryBuildSearchPattern(mode, query, out var pattern, out var asciiText))
         {
-            return Task.FromResult(false);
+            return false;
         }
 
-        var offset = FindCompareMatch(pattern, asciiText, forward);
+        var currentOffset = _currentOffset;
+        var offset = await Task.Run(() => FindCompareMatch(pattern, asciiText, forward, currentOffset));
         if (offset < 0)
         {
             MessageBox.Show(this, "Search pattern not found.", "Hex Compare", MessageBoxButton.OK, MessageBoxImage.Information);
-            return Task.FromResult(false);
+            return false;
         }
 
         ScrollToOffset(offset);
-        return Task.FromResult(true);
+        return true;
     }
 
-    private Task<bool> SearchAllAsync(string mode, string query)
+    private async Task<bool> SearchAllAsync(string mode, string query)
     {
         if (!TryBuildSearchPattern(mode, query, out var pattern, out var asciiText))
         {
-            return Task.FromResult(false);
+            return false;
         }
 
-        var offset = FindCompareMatches(pattern, asciiText).FirstOrDefault(-1);
+        var offset = await Task.Run(() => FindFirstCompareMatch(pattern, asciiText));
         if (offset < 0)
         {
             MessageBox.Show(this, "Search pattern not found.", "Hex Compare", MessageBoxButton.OK, MessageBoxImage.Information);
-            return Task.FromResult(false);
+            return false;
         }
 
         ScrollToOffset(offset);
-        return Task.FromResult(true);
+        return true;
     }
 
     private void ScrollToFoundOffset(int offset, string notFoundMessage)
@@ -183,39 +189,47 @@ public partial class HexCompareWindow : Window
         return false;
     }
 
-    private int FindCompareMatch(byte[] pattern, bool asciiText, bool forward)
+    private int FindCompareMatch(byte[] pattern, bool asciiText, bool forward, int currentOffset)
     {
-        var matches = FindCompareMatches(pattern, asciiText);
-        if (matches.Count == 0)
+        if (_result.Length == 0)
         {
             return -1;
         }
 
         if (forward)
         {
-            return matches.FirstOrDefault(offset => offset > _currentOffset, matches[0]);
+            var offset = FindCompareMatchFrom(pattern, asciiText, Math.Min(currentOffset + 1, _result.Length - 1), forward);
+            return offset >= 0 ? offset : FindCompareMatchFrom(pattern, asciiText, 0, forward);
         }
 
-        for (var i = matches.Count - 1; i >= 0; i--)
-        {
-            if (matches[i] < _currentOffset)
-            {
-                return matches[i];
-            }
-        }
-
-        return matches[^1];
+        var start = Math.Max(currentOffset - 1, 0);
+        var previous = FindCompareMatchFrom(pattern, asciiText, start, forward);
+        return previous >= 0 ? previous : FindCompareMatchFrom(pattern, asciiText, _result.Length - 1, forward);
     }
 
-    private List<int> FindCompareMatches(byte[] pattern, bool asciiText)
+    private int FindFirstCompareMatch(byte[] pattern, bool asciiText) =>
+        FindCompareMatchFrom(pattern, asciiText, 0, forward: true);
+
+    private int FindCompareMatchFrom(byte[] pattern, bool asciiText, int startOffset, bool forward)
     {
-        var matches = asciiText
-            ? HexSearchService.FindAllAsciiText(_first.Buffer, pattern)
-            : HexSearchService.FindAllBytes(_first.Buffer, pattern);
-        matches.AddRange(asciiText
-            ? HexSearchService.FindAllAsciiText(_second.Buffer, pattern)
-            : HexSearchService.FindAllBytes(_second.Buffer, pattern));
-        return matches.Distinct().Order().ToList();
+        var firstOffset = asciiText
+            ? HexSearchService.FindAsciiText(_first.Buffer, pattern, startOffset, forward)
+            : HexSearchService.FindBytes(_first.Buffer, pattern, startOffset, forward);
+        var secondOffset = asciiText
+            ? HexSearchService.FindAsciiText(_second.Buffer, pattern, startOffset, forward)
+            : HexSearchService.FindBytes(_second.Buffer, pattern, startOffset, forward);
+
+        if (firstOffset < 0)
+        {
+            return secondOffset;
+        }
+
+        if (secondOffset < 0)
+        {
+            return firstOffset;
+        }
+
+        return forward ? Math.Min(firstOffset, secondOffset) : Math.Max(firstOffset, secondOffset);
     }
 
     private void CompareScrollBar_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

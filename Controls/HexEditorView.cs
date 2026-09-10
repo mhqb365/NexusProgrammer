@@ -520,7 +520,6 @@ public sealed class HexEditorView : FrameworkElement
 
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         InvalidateVisual();
-        SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void SetByte(int offset, byte value)
