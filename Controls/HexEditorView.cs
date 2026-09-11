@@ -40,17 +40,28 @@ public sealed class HexEditorView : FrameworkElement
     private readonly HashSet<int> _editedOffsets = [];
     private readonly MenuItem _copyItem;
     private readonly MenuItem _pasteItem;
+    private readonly MenuItem _replaceItem;
     private readonly MenuItem _fillSelectionItem;
+    private ReplaceRequestEventArgs? _contextReplaceRequest;
 
     public HexEditorView()
     {
         Focusable = true;
         ClipToBounds = true;
 
-        _copyItem = new MenuItem { Header = "Copy" };
+        _copyItem = new MenuItem { Header = "Copy", InputGestureText = "Ctrl+C" };
         _copyItem.Click += (_, _) => CopySelection();
-        _pasteItem = new MenuItem { Header = "Paste" };
+        _pasteItem = new MenuItem { Header = "Paste", InputGestureText = "Ctrl+V" };
         _pasteItem.Click += (_, _) => PasteClipboard();
+        _replaceItem = new MenuItem { Header = "Replace", InputGestureText = "Ctrl+R" };
+        _replaceItem.Click += (_, _) =>
+        {
+            var request = _contextReplaceRequest ?? CreateReplaceRequest();
+            if (request is not null)
+            {
+                ReplaceSelectionRequested?.Invoke(this, request);
+            }
+        };
         _fillSelectionItem = new MenuItem { Header = "Fill selection" };
         _fillSelectionItem.Click += (_, _) =>
         {
@@ -61,11 +72,13 @@ public sealed class HexEditorView : FrameworkElement
         };
         var clearBufferItem = new MenuItem { Header = "Clear buffer" };
         clearBufferItem.Click += (_, _) => ClearBufferRequested?.Invoke(this, EventArgs.Empty);
-        ContextMenu = new ContextMenu { Items = { _copyItem, _pasteItem, _fillSelectionItem, new Separator(), clearBufferItem } };
+        ContextMenu = new ContextMenu { Items = { _copyItem, _pasteItem, _replaceItem, _fillSelectionItem, new Separator(), clearBufferItem } };
         ContextMenu.Opened += (_, _) =>
         {
+            _contextReplaceRequest ??= CreateReplaceRequest();
             _copyItem.IsEnabled = SelectionLength > 0;
             _pasteItem.IsEnabled = Clipboard.ContainsText() && _buffer.Length > 0 && (uint)_selectedOffset < _buffer.Length;
+            _replaceItem.IsEnabled = _contextReplaceRequest is not null;
             _fillSelectionItem.IsEnabled = SelectionLength > 1;
         };
     }
@@ -103,6 +116,19 @@ public sealed class HexEditorView : FrameworkElement
     public event EventHandler? ClearBufferRequested;
 
     public event EventHandler? FillSelectionRequested;
+
+    public event EventHandler<ReplaceRequestEventArgs>? ReplaceSelectionRequested;
+
+    public ReplaceRequestEventArgs? CreateReplaceRequest()
+    {
+        if (_buffer.Length == 0 || (uint)_selectedOffset >= _buffer.Length)
+        {
+            return null;
+        }
+
+        var length = Math.Max(1, SelectionLength);
+        return new ReplaceRequestEventArgs(SelectionStart, length, _asciiEdit ? "Text" : "Hex");
+    }
 
     public event EventHandler? SelectionChanged;
 
@@ -313,6 +339,49 @@ public sealed class HexEditorView : FrameworkElement
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         InvalidateVisual();
+    }
+
+    protected override void OnPreviewMouseRightButtonDown(MouseButtonEventArgs e)
+    {
+        Focus();
+        _contextReplaceRequest = null;
+        if (!TryHitTestOffset(e.GetPosition(this), out var offset, out var ascii))
+        {
+            return;
+        }
+
+        var insideSelection = SelectionLength > 1 &&
+            offset >= SelectionStart &&
+            offset < SelectionStart + SelectionLength;
+        if (!insideSelection)
+        {
+            _selectedOffset = offset;
+            _selectionAnchor = offset;
+            _selectionEnd = offset;
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        _asciiEdit = ascii;
+        _pendingNibble = -1;
+        var start = insideSelection ? SelectionStart : offset;
+        var length = insideSelection ? SelectionLength : 1;
+        _contextReplaceRequest = new ReplaceRequestEventArgs(start, length, ascii ? "Text" : "Hex");
+        InvalidateVisual();
+    }
+
+    protected override void OnContextMenuOpening(ContextMenuEventArgs e)
+    {
+        base.OnContextMenuOpening(e);
+        var point = PointFromScreen(new Point(e.CursorLeft, e.CursorTop));
+        if (TryHitTestOffset(point, out var offset, out var ascii))
+        {
+            var insideSelection = SelectionLength > 1 &&
+                offset >= SelectionStart &&
+                offset < SelectionStart + SelectionLength;
+            var start = insideSelection ? SelectionStart : offset;
+            var length = insideSelection ? SelectionLength : 1;
+            _contextReplaceRequest = new ReplaceRequestEventArgs(start, length, ascii ? "Text" : "Hex");
+        }
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -713,4 +782,11 @@ public sealed class HexEditorView : FrameworkElement
     private sealed record EditBatch(ByteEdit[] Edits);
 
     private readonly record struct ByteEdit(int Offset, byte OldValue, byte NewValue);
+}
+
+public sealed class ReplaceRequestEventArgs(int offset, int length, string mode) : EventArgs
+{
+    public int Offset { get; } = offset;
+    public int Length { get; } = length;
+    public string Mode { get; } = mode;
 }

@@ -637,7 +637,8 @@
                                 <MenuItem Header="Paste" InputGestureText="Ctrl+V"
                                     Click="PasteHexClipboard_Click" />
                                 <MenuItem Header="Replace" InputGestureText="Ctrl+R"
-                                    Click="HexReplace_Click" />
+                                    Click="ReplaceSelection_Click" />
+                                <MenuItem Header="Fill selection" Click="FillSelection_Click" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>

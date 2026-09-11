@@ -473,6 +473,7 @@ public partial class MainWindow : Window
     {
         editor.ClearBufferRequested += HexEditor_ClearBufferRequested;
         editor.FillSelectionRequested += HexEditor_FillSelectionRequested;
+        editor.ReplaceSelectionRequested += HexEditor_ReplaceSelectionRequested;
         editor.SelectionChanged += HexEditor_SelectionChanged;
     }
 
@@ -1353,6 +1354,23 @@ public partial class MainWindow : Window
     {
         _activeMemoryTab?.Editor.PasteClipboard();
         UpdateStatus();
+    }
+
+    private void ReplaceSelection_Click(object sender, RoutedEventArgs e)
+    {
+        var request = _activeMemoryTab?.Editor.CreateReplaceRequest();
+        if (request is not null && _activeMemoryTab is not null)
+        {
+            ReplaceSelectedRange(_activeMemoryTab.Editor, request);
+        }
+    }
+
+    private void FillSelection_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeMemoryTab is not null)
+        {
+            HexEditor_FillSelectionRequested(_activeMemoryTab.Editor, EventArgs.Empty);
+        }
     }
 
     private void HexMarkerManage_Click(object sender, RoutedEventArgs e)
@@ -2484,6 +2502,142 @@ public partial class MainWindow : Window
 
         var action = changed ? "filled" : "already matches";
         AppendLog($"{MemoryTabDisplayName(state)} selection {action}: 0x{start:X6}-0x{start + length - 1:X6} with {HexSearchService.FormatHexPattern(dialog.FillPattern)}");
+    }
+
+    private void HexEditor_ReplaceSelectionRequested(object? sender, ReplaceRequestEventArgs e)
+    {
+        if (sender is HexEditorView editor)
+        {
+            ReplaceSelectedRange(editor, e);
+        }
+    }
+
+    private void ReplaceSelectedRange(HexEditorView editor, ReplaceRequestEventArgs request)
+    {
+        var state = _memoryTabs.Values.FirstOrDefault(item => ReferenceEquals(item.Editor, editor));
+        if (state is null || state.Buffer.Length == 0)
+        {
+            return;
+        }
+
+        var start = Math.Clamp(request.Offset, 0, state.Buffer.Length - 1);
+        var length = Math.Min(Math.Max(1, request.Length), state.Buffer.Length - start);
+        var currentBytes = state.Buffer[start..(start + length)];
+        var initialValue = string.Equals(request.Mode, "Text", StringComparison.OrdinalIgnoreCase)
+            ? Encoding.ASCII.GetString(currentBytes.Select(value => value is >= 32 and <= 126 ? value : (byte)'.').ToArray())
+            : HexSearchService.FormatHexPattern(currentBytes);
+
+        MemoryTabControl.SelectedItem = state.Tab;
+        if (!TryPromptReplacementBytes(request.Mode, initialValue, out var replacement) || replacement.Length == 0)
+        {
+            return;
+        }
+
+        if (start + replacement.Length > state.Buffer.Length)
+        {
+            MessageBox.Show(this, "Replacement value does not fit in the buffer.", "Replace", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var changed = editor.ReplaceBytes(start, replacement);
+        state.MeaAnalysis = null;
+        UpdateStatus();
+        AppendLog(changed
+            ? $"{MemoryTabDisplayName(state)} replaced 0x{start:X6}-0x{start + replacement.Length - 1:X6}"
+            : $"{MemoryTabDisplayName(state)} replace skipped: range already matches");
+    }
+
+    private bool TryPromptReplacementBytes(string initialMode, string initialValue, out byte[] replacement)
+    {
+        replacement = [];
+        var dialog = new Window
+        {
+            Title = "Replace",
+            Owner = this,
+            Width = 380,
+            Height = 210,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            Background = (Brush)FindResource("AppBackgroundBrush"),
+            Foreground = (Brush)FindResource("TextBrush")
+        };
+
+        var grid = new Grid { Margin = new Thickness(10) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(34) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(34) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(34) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(44) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var modeLabel = new TextBlock { Text = "Mode", VerticalAlignment = VerticalAlignment.Center };
+        var modeBox = new ComboBox { Height = 24, ItemsSource = new[] { "Hex", "Text" }, SelectedItem = initialMode };
+        Grid.SetColumn(modeBox, 1);
+
+        var findLabel = new TextBlock { Text = "Find", VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetRow(findLabel, 1);
+        var findBox = new TextBox { Height = 24, Text = initialValue };
+        Grid.SetRow(findBox, 1);
+        Grid.SetColumn(findBox, 1);
+
+        var replaceLabel = new TextBlock { Text = "Replace", VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetRow(replaceLabel, 2);
+        var replaceBox = new TextBox { Height = 24 };
+        Grid.SetRow(replaceBox, 2);
+        Grid.SetColumn(replaceBox, 1);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        Grid.SetRow(buttons, 3);
+        Grid.SetColumnSpan(buttons, 2);
+        var replaceButton = new Button { Content = "Replace", Width = 76, Height = 26, IsDefault = true, Style = (Style)FindResource("ThemedButtonStyle") };
+        var cancelButton = new Button { Content = "Cancel", Width = 76, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true, Style = (Style)FindResource("ThemedButtonStyle") };
+        buttons.Children.Add(replaceButton);
+        buttons.Children.Add(cancelButton);
+
+        grid.Children.Add(modeLabel);
+        grid.Children.Add(modeBox);
+        grid.Children.Add(findLabel);
+        grid.Children.Add(findBox);
+        grid.Children.Add(replaceLabel);
+        grid.Children.Add(replaceBox);
+        grid.Children.Add(buttons);
+        dialog.Content = grid;
+
+        byte[] parsed = [];
+        replaceButton.Click += (_, _) =>
+        {
+            if (string.Equals(modeBox.SelectedItem as string, "Text", StringComparison.OrdinalIgnoreCase))
+            {
+                parsed = Encoding.ASCII.GetBytes(replaceBox.Text);
+            }
+            else if (!HexSearchService.TryParseHexPattern(replaceBox.Text, out parsed))
+            {
+                MessageBox.Show(dialog, "Invalid replacement hex.", "Replace", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (parsed.Length == 0)
+            {
+                MessageBox.Show(dialog, "Replacement value is required.", "Replace", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            dialog.DialogResult = true;
+        };
+        dialog.Loaded += (_, _) =>
+        {
+            replaceBox.Focus();
+            replaceBox.SelectAll();
+        };
+
+        var accepted = dialog.ShowDialog() == true;
+        replacement = accepted ? parsed : [];
+        return accepted;
     }
 
     private void Fill00_Click(object sender, RoutedEventArgs e)
