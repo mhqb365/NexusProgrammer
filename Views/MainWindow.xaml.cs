@@ -1427,7 +1427,7 @@ public partial class MainWindow : Window
         }
 
         SetHexSearchInputs("Hex", marker.Hex);
-        await RunSearchAsync(forward: true);
+        await RunSearchAllAsync();
     }
 
     private async void AsciiMarker_Click(object sender, RoutedEventArgs e)
@@ -1438,7 +1438,7 @@ public partial class MainWindow : Window
         }
 
         SetHexSearchInputs("Text", marker.Hex);
-        await RunSearchAsync(forward: true);
+        await RunSearchAllAsync();
     }
 
     private void RefreshHexMarkerMenu()

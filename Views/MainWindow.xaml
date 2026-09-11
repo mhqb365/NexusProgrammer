@@ -636,6 +636,8 @@
                                     Click="CopyHexSelection_Click" />
                                 <MenuItem Header="Paste" InputGestureText="Ctrl+V"
                                     Click="PasteHexClipboard_Click" />
+                                <MenuItem Header="Replace" InputGestureText="Ctrl+R"
+                                    Click="HexReplace_Click" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
@@ -646,8 +648,6 @@
                             <ContextMenu>
                                 <MenuItem Header="Find" InputGestureText="Ctrl+F"
                                     Click="HexSearchWindowButton_Click" />
-                                <MenuItem Header="Replace" InputGestureText="Ctrl+R"
-                                    Click="HexReplace_Click" />
                                 <MenuItem Header="Go to" InputGestureText="Ctrl+G"
                                     Click="GoToOffset_Click" />
                                 <Separator />
