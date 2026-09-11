@@ -22,7 +22,7 @@
             Command="{x:Static local:MainWindow.GoToOffsetCommand}" />
         <KeyBinding Key="F" Modifiers="Control"
             Command="{x:Static local:MainWindow.SearchCommand}" />
-        <KeyBinding Key="H" Modifiers="Control"
+        <KeyBinding Key="R" Modifiers="Control"
             Command="{x:Static local:MainWindow.ReplaceCommand}" />
         <KeyBinding Key="Q" Modifiers="Control" Command="{x:Static local:MainWindow.ExitCommand}" />
     </Window.InputBindings>
@@ -462,12 +462,12 @@
                         <TextBlock Text="Erase" HorizontalAlignment="Center" FontSize="10" />
                     </StackPanel>
                 </Button>
-                <Button x:Name="ScriptButton" ToolTip="Run workflow script"
+                <Button x:Name="ScriptButton" ToolTip="Run automatic workflow"
                     Click="ScriptButton_Click">
                     <StackPanel>
-                        <iconPacks:PackIconLucide Width="18" Height="18" Kind="ScrollText"
+                        <iconPacks:PackIconLucide Width="18" Height="18" Kind="Workflow"
                             HorizontalAlignment="Center" />
-                        <TextBlock Text="Scripts" HorizontalAlignment="Center" FontSize="10" />
+                        <TextBlock Text="Auto" HorizontalAlignment="Center" FontSize="10" />
                     </StackPanel>
                     <Button.ContextMenu>
                         <ContextMenu>
@@ -611,13 +611,14 @@
                         Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="Clear Intel ME region" Click="ClearMe_Click">Clear ME</Button>
                     <Button x:Name="WindowsKeyMenuButton" DockPanel.Dock="Right"
-                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
+                        Width="70" Height="20" Margin="2,4,8,4" Padding="0"
                         Style="{StaticResource HexHeaderButtonStyle}"
-                        ToolTip="BIOS tools" Click="WindowsKeyMenuButton_Click">Tools <Button.ContextMenu>
+                        ToolTip="BIOS tools" Click="WindowsKeyMenuButton_Click">Tools<Button.ContextMenu>
                             <ContextMenu>
+                                <MenuItem Header="Merge" Click="MergeBios_Click" />
+                                <MenuItem Header="Split" Click="SplitBios_Click" />
+                                <MenuItem Header="Compare" Click="HexCompare_Click" />
                                 <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
-                                <MenuItem Header="Merge BIOS" Click="MergeBios_Click" />
-                                <MenuItem Header="Split BIOS" Click="SplitBios_Click" />
                                 <Separator />
                                 <MenuItem Header="Unlock ACER" Click="UnlockAcer_Click" />
                                 <MenuItem Header="Unlock ASUS" Click="UnlockAsus_Click" />
@@ -626,33 +627,41 @@
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
-                    <Button x:Name="HexMarkerButton" DockPanel.Dock="Right"
-                        Width="82" Height="20" Margin="2,4,2,4" Padding="0"
+                    <Button x:Name="EditMenuButton" DockPanel.Dock="Right"
+                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
                         Style="{StaticResource HexHeaderButtonStyle}"
-                        ToolTip="Hex marker" Click="HexMarkerButton_Click">Hex Marker <Button.ContextMenu>
-                            <ContextMenu x:Name="HexMarkerMenuItem">
-                                <MenuItem Header="Manage" Click="HexMarkerManage_Click" />
-                                <Separator />
+                        ToolTip="Edit BIOS buffers" Click="EditMenuButton_Click">Edit<Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Copy" InputGestureText="Ctrl+C"
+                                    Click="CopyHexSelection_Click" />
+                                <MenuItem Header="Paste" InputGestureText="Ctrl+V"
+                                    Click="PasteHexClipboard_Click" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
-                    <Button x:Name="HexCompareButton" DockPanel.Dock="Right"
-                        Width="88" Height="20" Margin="2,4,2,4" Padding="0"
-                        Style="{StaticResource HexHeaderButtonStyle}"
-                        ToolTip="Compare two Memory BIOS buffers" Click="HexCompare_Click">Hex
-                        Compare</Button>
-                    <Button x:Name="HexReplaceWindowButton" DockPanel.Dock="Right"
+                    <Button x:Name="SearchMenuButton" DockPanel.Dock="Right"
                         Width="70" Height="20" Margin="2,4,2,4" Padding="0"
                         Style="{StaticResource HexHeaderButtonStyle}"
-                        ToolTip="Open replace dialog" Click="HexReplace_Click">Replace</Button>
-                    <Button x:Name="GoToOffsetButton" DockPanel.Dock="Right"
-                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
-                        Style="{StaticResource HexHeaderButtonStyle}"
-                        ToolTip="Go to offset" Click="GoToOffset_Click">Go to</Button>
-                    <Button x:Name="HexSearchWindowButton" DockPanel.Dock="Right"
-                        Width="70" Height="20" Margin="2,4,2,4" Padding="0"
-                        Style="{StaticResource HexHeaderButtonStyle}"
-                        ToolTip="Open hex search" Click="HexSearchWindowButton_Click">Search</Button>
+                        ToolTip="Search tools" Click="SearchMenuButton_Click">Search<Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Find" InputGestureText="Ctrl+F"
+                                    Click="HexSearchWindowButton_Click" />
+                                <MenuItem Header="Replace" InputGestureText="Ctrl+R"
+                                    Click="HexReplace_Click" />
+                                <MenuItem Header="Go to" InputGestureText="Ctrl+G"
+                                    Click="GoToOffset_Click" />
+                                <Separator />
+                                <MenuItem x:Name="HexMarkerMenuItem" Header="HEX Marker">
+                                    <MenuItem Header="Manage" Click="HexMarkerManage_Click" />
+                                    <Separator />
+                                </MenuItem>
+                                <MenuItem x:Name="AsciiMarkerMenuItem" Header="ASCII Marker">
+                                    <MenuItem Header="Manage" Click="AsciiMarkerManage_Click" />
+                                    <Separator />
+                                </MenuItem>
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
                     <Button x:Name="HexSearchNextButton" DockPanel.Dock="Right" Width="24"
                         Height="20" Margin="2,4,2,4" Padding="0" ToolTip="Find next"
                         Visibility="Collapsed"

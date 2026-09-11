@@ -6,11 +6,15 @@ namespace NexusProgrammer;
 public partial class HexMarkerWindow : Window
 {
     private readonly ObservableCollection<HexMarker> _markers;
+    private readonly bool _formatHex;
     private bool _formattingHexText;
 
-    public HexMarkerWindow(IEnumerable<HexMarker> markers)
+    public HexMarkerWindow(IEnumerable<HexMarker> markers, string title = "Hex Marker", string valueLabel = "Hex", bool formatHex = true)
     {
         InitializeComponent();
+        Title = title;
+        ValueLabel.Text = valueLabel;
+        _formatHex = formatHex;
         _markers = new ObservableCollection<HexMarker>(markers.Select(Clone));
         MarkerList.ItemsSource = _markers;
     }
@@ -75,7 +79,7 @@ public partial class HexMarkerWindow : Window
 
     private void HexBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
-        if (_formattingHexText)
+        if (!_formatHex || _formattingHexText)
         {
             return;
         }
@@ -114,16 +118,23 @@ public partial class HexMarkerWindow : Window
             return false;
         }
 
-        if (!HexSearchService.TryParseHexPattern(hex, out var pattern))
+        byte[] pattern = [];
+        if (_formatHex && !HexSearchService.TryParseHexPattern(hex, out pattern))
         {
             MessageBox.Show("Invalid hex marker.", "Hex Marker", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+
+        if (!_formatHex && string.IsNullOrEmpty(hex))
+        {
+            MessageBox.Show("ASCII marker is required.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
         marker = new HexMarker
         {
             Name = name,
-            Hex = HexSearchService.FormatHexPattern(pattern)
+            Hex = _formatHex ? HexSearchService.FormatHexPattern(pattern) : hex
         };
         return true;
     }

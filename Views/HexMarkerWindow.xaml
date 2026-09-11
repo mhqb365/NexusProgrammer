@@ -79,7 +79,7 @@
         <TextBox x:Name="NameBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
             Height="24" Margin="0,0,0,6" />
 
-        <TextBlock Grid.Row="2" Grid.Column="0" Text="Hex" VerticalAlignment="Center" />
+        <TextBlock x:Name="ValueLabel" Grid.Row="2" Grid.Column="0" Text="Hex" VerticalAlignment="Center" />
         <TextBox x:Name="HexBox" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
             Height="24" Margin="0,0,0,6" TextChanged="HexBox_TextChanged" />
 

@@ -53,7 +53,7 @@ public partial class MainWindow : Window
         "Replace",
         nameof(ReplaceCommand),
         typeof(MainWindow),
-        [new KeyGesture(Key.H, ModifierKeys.Control)]);
+        [new KeyGesture(Key.R, ModifierKeys.Control)]);
     public static readonly RoutedUICommand ExitCommand = new(
         "Exit",
         nameof(ExitCommand),
@@ -69,6 +69,7 @@ public partial class MainWindow : Window
     private readonly List<ChipProfile> _chips = [];
     private readonly Dictionary<TabItem, MemoryTabState> _memoryTabs = [];
     private List<HexMarker> _hexMarkers = HexMarkerStore.Load();
+    private List<HexMarker> _asciiMarkers = AsciiMarkerStore.Load();
     private List<HexFillPreset> _hexFillPresets = HexFillPresetStore.Load();
 
     private readonly List<ProgrammerOption> _programmerOptions =
@@ -121,6 +122,7 @@ public partial class MainWindow : Window
         Bios1Tab.Header = CreateMemoryTabHeader(_activeMemoryTab, canClose: false);
         SearchHitsGrid.ItemsSource = _searchHits;
         RefreshHexMarkerMenu();
+        RefreshAsciiMarkerMenu();
         WireHexEditorActions(HexEditor);
         HexEditor.SetBuffer(_buffer, OnHexCellChanged);
         UpdateHexScrollBar();
@@ -1330,10 +1332,27 @@ public partial class MainWindow : Window
         WindowsKeyMenuButton.ContextMenu.IsOpen = true;
     }
 
-    private void HexMarkerButton_Click(object sender, RoutedEventArgs e)
+    private void SearchMenuButton_Click(object sender, RoutedEventArgs e)
     {
-        HexMarkerButton.ContextMenu.PlacementTarget = HexMarkerButton;
-        HexMarkerButton.ContextMenu.IsOpen = true;
+        SearchMenuButton.ContextMenu.PlacementTarget = SearchMenuButton;
+        SearchMenuButton.ContextMenu.IsOpen = true;
+    }
+
+    private void EditMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        EditMenuButton.ContextMenu.PlacementTarget = EditMenuButton;
+        EditMenuButton.ContextMenu.IsOpen = true;
+    }
+
+    private void CopyHexSelection_Click(object sender, RoutedEventArgs e)
+    {
+        _activeMemoryTab?.Editor.CopySelection();
+    }
+
+    private void PasteHexClipboard_Click(object sender, RoutedEventArgs e)
+    {
+        _activeMemoryTab?.Editor.PasteClipboard();
+        UpdateStatus();
     }
 
     private void HexMarkerManage_Click(object sender, RoutedEventArgs e)
@@ -1347,6 +1366,19 @@ public partial class MainWindow : Window
         _hexMarkers = dialog.Markers.ToList();
         HexMarkerStore.Save(_hexMarkers);
         RefreshHexMarkerMenu();
+    }
+
+    private void AsciiMarkerManage_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new HexMarkerWindow(_asciiMarkers, "ASCII Marker", "ASCII", formatHex: false)
+        {
+            Owner = this
+        };
+
+        dialog.ShowDialog();
+        _asciiMarkers = dialog.Markers.ToList();
+        AsciiMarkerStore.Save(_asciiMarkers);
+        RefreshAsciiMarkerMenu();
     }
 
     private async void HexCompare_Click(object sender, RoutedEventArgs e)
@@ -1398,6 +1430,17 @@ public partial class MainWindow : Window
         await RunSearchAsync(forward: true);
     }
 
+    private async void AsciiMarker_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: HexMarker marker })
+        {
+            return;
+        }
+
+        SetHexSearchInputs("Text", marker.Hex);
+        await RunSearchAsync(forward: true);
+    }
+
     private void RefreshHexMarkerMenu()
     {
         while (HexMarkerMenuItem.Items.Count > 2)
@@ -1424,6 +1467,35 @@ public partial class MainWindow : Window
             };
             item.Click += HexMarker_Click;
             HexMarkerMenuItem.Items.Add(item);
+        }
+    }
+
+    private void RefreshAsciiMarkerMenu()
+    {
+        while (AsciiMarkerMenuItem.Items.Count > 2)
+        {
+            AsciiMarkerMenuItem.Items.RemoveAt(2);
+        }
+
+        var markers = _asciiMarkers
+            .Where(marker => !string.IsNullOrWhiteSpace(marker.Name) && !string.IsNullOrWhiteSpace(marker.Hex))
+            .ToList();
+        if (markers.Count == 0)
+        {
+            AsciiMarkerMenuItem.Items.Add(new MenuItem { Header = "(empty)", IsEnabled = false });
+            return;
+        }
+
+        foreach (var marker in markers)
+        {
+            var item = new MenuItem
+            {
+                Header = marker.Name,
+                ToolTip = marker.Hex,
+                Tag = marker
+            };
+            item.Click += AsciiMarker_Click;
+            AsciiMarkerMenuItem.Items.Add(item);
         }
     }
 
@@ -1687,10 +1759,9 @@ public partial class MainWindow : Window
         HexSearchNextButton.IsEnabled = enabled;
         HexReplaceButton.IsEnabled = enabled;
         WindowsKeyMenuButton.IsEnabled = enabled;
-        HexMarkerButton.IsEnabled = enabled;
-        HexSearchWindowButton.IsEnabled = enabled;
-        HexReplaceWindowButton.IsEnabled = enabled;
-        GoToOffsetButton.IsEnabled = enabled;
+        ClearMeButton.IsEnabled = enabled;
+        SearchMenuButton.IsEnabled = enabled;
+        EditMenuButton.IsEnabled = enabled;
     }
 
     private string CurrentHexSearchMode() => HexSearchModeCombo.SelectedItem as string ?? "Offset";

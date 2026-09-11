@@ -422,7 +422,7 @@ public sealed class HexEditorView : FrameworkElement
         e.Handled = true;
     }
 
-    private void CopySelection()
+    public void CopySelection()
     {
         var start = Math.Min(_selectionAnchor, _selectionEnd);
         var end = Math.Max(_selectionAnchor, _selectionEnd);
@@ -438,7 +438,7 @@ public sealed class HexEditorView : FrameworkElement
         Clipboard.SetText(text);
     }
 
-    private void PasteClipboard()
+    public void PasteClipboard()
     {
         if (!Clipboard.ContainsText())
         {
