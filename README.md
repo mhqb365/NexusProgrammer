@@ -8,7 +8,7 @@ English | [Tiếng Việt](#tiếng-việt)
 
 A modern BIOS programming tool for hardware technicians and repair professionals.
 
-## Features
+### Features
 
 - Supports CH341, CH347, XGecu T48, RT809F and RT809H programmers.
 - Automatic programmer detection, IC detection, IC catalog search and custom IC entries.
@@ -23,7 +23,7 @@ A modern BIOS programming tool for hardware technicians and repair professionals
 
 ME Region and FIT are not distributed with this project. You must prepare them yourself, or download here: [ME Region & FIT](https://drive.google.com/drive/folders/1ocp61oICeFGZuf-J59gpnLO88XGzKvPY?usp=sharing)
 
-## Toolbar And Menus
+### Toolbar And Menus
 
 - Main toolbar: New, Open, Save, Search IC, Detect, Read, Write, Verify, Erase, Auto and Stop.
 - Hex Editor header:
@@ -33,7 +33,7 @@ ME Region and FIT are not distributed with this project. You must prepare them y
   - Clear ME: open the Intel Clear ME workflow.
 - Hex Editor context menu: Copy, Paste, Replace, Select block, Fill selection and Clear buffer.
 
-## Requirements
+### Requirements
 
 - Windows 10/11
 - .NET 8
@@ -42,7 +42,7 @@ ME Region and FIT are not distributed with this project. You must prepare them y
 - RT809F Driver: [DriverRT809F.zip](Drivers/DriverRT809F.zip)
 - RT809H Driver: [DriverRT809H.zip](Drivers/DriverRT809H.zip)
 
-## SDKs
+### SDKs
 
 This repository includes experimental .NET hardware SDKs which can be used outside the WPF application:
 
@@ -52,7 +52,7 @@ This repository includes experimental .NET hardware SDKs which can be used outsi
 
 These SDKs are unofficial community projects and are not endorsed by the device vendors. Treat erase and write operations as destructive and test new integrations with sacrificial flash chips.
 
-## Build
+### Build
 
 Use the included build script to produce a versioned output folder:
 
@@ -62,11 +62,11 @@ Build.bat
 
 The script builds the app and copies the build output to `build/NexusProgrammer_v<current version>`.
 
-## Download
+### Download
 
 You can download the latest release from the [Releases page](https://github.com/mhqb365/NexusProgrammer/releases).
 
-## Shortcuts
+### Shortcuts
 
 - Ctrl + Shift + N: Open a new application window
 - Ctrl + N: Create a new ROM buffer
@@ -79,7 +79,11 @@ You can download the latest release from the [Releases page](https://github.com/
 - Ctrl + V: Paste at caret
 - Ctrl + Q: Exit the application
 
-## License
+### Discussion
+
+Create a Discussion on GitHub to discuss features, report bugs and propose improvements. Or discuss on Telegram at https://t.me/+O-3wSYgW95lkNThl
+
+### License
 
 MIT License
 
@@ -87,17 +91,13 @@ Parts of the CH341/CH347 SPI NOR chip catalog are generated from flashrom chip d
 
 See `THIRD_PARTY_NOTICES.md` and `flashrom-data/COPYING.rst` for more information.
 
-## Discussion
-
-Create a Discussion on GitHub to discuss features, report bugs and propose improvements. Or discuss on Telegram at https://t.me/+O-3wSYgW95lkNThl
-
 ## Tiếng Việt
 
 [English](#english) | Tiếng Việt
 
 Một công cụ nạp BIOS hiện đại dành cho kỹ thuật viên phần cứng và chuyên gia sửa chữa.
 
-## Tính năng
+### Tính năng
 
 - Hỗ trợ máy nạp CH341, CH347, XGecu T48, RT809F và RT809H.
 - Tự động nhận dạng máy nạp, nhận dạng IC, tìm kiếm catalog IC và thêm IC tùy chỉnh.
@@ -112,7 +112,7 @@ Một công cụ nạp BIOS hiện đại dành cho kỹ thuật viên phần c�
 
 ME Region và FIT không được phân phối kèm theo dự án này. Bạn phải tự chuẩn bị hoặc tải về tại đây: [ME Region & FIT](https://drive.google.com/drive/folders/1ocp61oICeFGZuf-J59gpnLO88XGzKvPY?usp=sharing)
 
-## Thanh công cụ và menu
+### Thanh công cụ và menu
 
 - Toolbar chính: New, Open, Save, Search IC, Detect, Read, Write, Verify, Erase, Auto và Stop.
 - Header của Hex Editor:
@@ -122,7 +122,7 @@ ME Region và FIT không được phân phối kèm theo dự án này. Bạn ph
   - Clear ME: mở workflow Clear ME Intel BIOS.
 - Menu chuột phải trong Hex Editor: Copy, Paste, Replace, Select block, Fill selection và Clear buffer.
 
-## Yêu cầu
+### Yêu cầu
 
 - Windows 10/11
 - .NET 8
@@ -131,7 +131,7 @@ ME Region và FIT không được phân phối kèm theo dự án này. Bạn ph
 - Driver RT809F: [DriverRT809F.zip](Drivers/DriverRT809F.zip)
 - Driver RT809H: [DriverRT809H.zip](Drivers/DriverRT809H.zip)
 
-## SDK
+### SDK
 
 Repository này có kèm các SDK phần cứng .NET thử nghiệm, có thể dùng độc lập với ứng dụng WPF:
 
@@ -141,7 +141,7 @@ Repository này có kèm các SDK phần cứng .NET thử nghiệm, có thể d
 
 Các SDK này là dự án cộng đồng không chính thức và không được nhà sản xuất thiết bị xác nhận hay bảo trợ. Thao tác xóa và ghi có thể phá hủy dữ liệu trên chip, hãy thử nghiệm tích hợp mới bằng chip thử trước.
 
-## Build
+### Build
 
 Dùng script có sẵn để tạo thư mục output theo version:
 
@@ -151,11 +151,11 @@ Build.bat
 
 Script sẽ build app và copy output sang `build/NexusProgrammer_v<current version>`.
 
-## Tải về
+### Tải về
 
 Bạn có thể tải bản phát hành mới nhất tại [trang Releases](https://github.com/mhqb365/NexusProgrammer/releases).
 
-## Phím tắt
+### Phím tắt
 
 - Ctrl + Shift + N: Mở cửa sổ ứng dụng mới
 - Ctrl + N: Tạo buffer ROM mới
@@ -168,14 +168,14 @@ Bạn có thể tải bản phát hành mới nhất tại [trang Releases](http
 - Ctrl + V: Paste tại con trỏ
 - Ctrl + Q: Thoát ứng dụng
 
-## Giấy phép
+### Thảo luận
+
+Tạo Discussion trên GitHub để thảo luận về các tính năng, báo lỗi và đề xuất cải tiến. Hoặc thảo luận trên Telegram tại https://t.me/+O-3wSYgW95lkNThl
+
+### Giấy phép
 
 MIT License
 
 Một số phần trong danh sách IC SPI NOR của CH341/CH347 được tạo từ định nghĩa chip của flashrom và vẫn tuân theo giấy phép flashrom GPL-2.0-or-later.
 
 Xem `THIRD_PARTY_NOTICES.md` và `flashrom-data/COPYING.rst` để biết thêm thông tin.
-
-## Thảo luận
-
-Tạo Discussion trên GitHub để thảo luận về các tính năng, báo lỗi và đề xuất cải tiến. Hoặc thảo luận trên Telegram tại https://t.me/+O-3wSYgW95lkNThl
