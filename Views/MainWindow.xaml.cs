@@ -1187,7 +1187,7 @@ public partial class MainWindow : Window
         var memories = GetMemoryTabOptions().ToList();
         if (memories.Count < 2)
         {
-            MessageBox.Show(this, "Need at least 2 Memory tabs to merge.", "Merge BIOS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Need at least 2 Memory tabs to merge.", "Merge buffer", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -1206,7 +1206,7 @@ public partial class MainWindow : Window
         var sourceName = UniqueMemoryTabFileName(BiosToolService.MergedBiosFileNameFor(merged.Length));
         var tab = AddMemoryTabWithBuffer(merged, sourceName);
         MemoryTabControl.SelectedItem = tab;
-        AppendLog($"Merge BIOS completed: {string.Join(" + ", selected.Select(memory => memory.Label))} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({FormatBytes(merged.Length)})");
+        AppendLog($"Merge buffer completed: {string.Join(" + ", selected.Select(memory => memory.Label))} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({FormatBytes(merged.Length)})");
         await SaveCurrentBufferWithDialogAsync(sourceName);
     }
 
@@ -1215,7 +1215,7 @@ public partial class MainWindow : Window
         var memories = GetMemoryTabOptions().ToList();
         if (memories.Count == 0)
         {
-            MessageBox.Show(this, "Select a Memory tab first.", "Split BIOS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Select a Memory tab first.", "Split buffer", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -1239,7 +1239,7 @@ public partial class MainWindow : Window
         var fileName2 = UniqueMemoryTabFileName(BiosToolService.SplitedBiosFileNameFor(second.Length));
         var tab2 = AddMemoryTabWithBuffer(second, fileName2);
         MemoryTabControl.SelectedItem = tab1;
-        AppendLog($"Split BIOS completed: {memory.Label} -> {MemoryTabDisplayName(_memoryTabs[tab1])} ({FormatBytes(first.Length)}) + {MemoryTabDisplayName(_memoryTabs[tab2])} ({FormatBytes(second.Length)})");
+        AppendLog($"Split buffer completed: {memory.Label} -> {MemoryTabDisplayName(_memoryTabs[tab1])} ({FormatBytes(first.Length)}) + {MemoryTabDisplayName(_memoryTabs[tab2])} ({FormatBytes(second.Length)})");
         await SaveCurrentBufferWithDialogAsync(fileName1);
         MemoryTabControl.SelectedItem = tab2;
         await SaveCurrentBufferWithDialogAsync(fileName2);

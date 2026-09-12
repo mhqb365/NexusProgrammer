@@ -27,20 +27,20 @@ public partial class SplitBiosWindow : Window
     {
         if (Bios is null)
         {
-            MessageBox.Show(this, "Select a Memory tab first.", "Split BIOS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Select a Memory tab first.", "Split buffer", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (!TryParseSize(File1SizeBox.Text, out var file1Length) ||
             !TryParseSize(File2SizeBox.Text, out var file2Length))
         {
-            MessageBox.Show(this, "Enter valid sizes. Examples: 8, 8MB, 8192KB, 0x800000.", "Split BIOS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Enter valid sizes. Examples: 8, 8MB, 8192KB, 0x800000.", "Split buffer", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (file1Length <= 0 || file2Length <= 0 || file1Length + file2Length > Bios.Buffer.Length)
         {
-            MessageBox.Show(this, $"Split sizes must be positive and no larger than selected BIOS size ({FormatBytes(Bios.Buffer.Length)}).", "Split BIOS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"Split sizes must be positive and no larger than selected buffer size ({FormatBytes(Bios.Buffer.Length)}).", "Split buffer", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 

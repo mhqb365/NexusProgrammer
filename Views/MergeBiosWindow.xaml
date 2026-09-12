@@ -1,7 +1,7 @@
 <Window x:Class="NexusProgrammer.MergeBiosWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Merge BIOS" Width="520" Height="230" MinWidth="440" MinHeight="230"
+    Title="Merge buffer" Width="520" Height="230" MinWidth="440" MinHeight="230"
     WindowStartupLocation="CenterOwner"
     ResizeMode="CanResize"
     Background="{DynamicResource AppBackgroundBrush}"
@@ -15,7 +15,7 @@
         </Grid.RowDefinitions>
 
         <TabControl VerticalAlignment="Stretch">
-            <TabItem Header="Merge BIOS">
+            <TabItem Header="Merge buffer">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="64" />
@@ -28,14 +28,14 @@
                         <RowDefinition Height="58" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="BIOS 1"
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Buffer 1"
                         VerticalAlignment="Center" />
                     <ComboBox x:Name="Bios1Combo" Grid.Row="0" Grid.Column="1"
                         Height="24" Margin="0,0,8,6" />
                     <Button x:Name="ClearButton" Grid.Row="0" Grid.Column="2"
                         Height="24" Margin="0,0,0,6" Click="Clear_Click">X</Button>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="BIOS 2"
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Buffer 2"
                         VerticalAlignment="Center" />
                     <ComboBox x:Name="Bios2Combo" Grid.Row="1" Grid.Column="1"
                         Height="24" Margin="0,0,8,6" />

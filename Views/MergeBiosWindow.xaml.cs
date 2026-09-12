@@ -34,7 +34,7 @@ public partial class MergeBiosWindow : Window
     {
         if (Bios1 is null || Bios2 is null || ReferenceEquals(Bios1, Bios2))
         {
-            MessageBox.Show(this, "Select two different Memory tabs first.", "Merge BIOS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Select two different Memory tabs first.", "Merge buffer", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
