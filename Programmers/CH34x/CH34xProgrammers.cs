@@ -57,11 +57,10 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
             return false;
         }
 
-        var metadataValid = false;
         try
         {
-            metadataValid = TryGetDeviceInfo(index, out var info) && IsValidCh347Device(info);
-            return metadataValid && NativeMethods.CH347SPI_Init(index, in SpiConfig.Default);
+            return IsCompatibleCh347Device(index) &&
+                NativeMethods.CH347SPI_Init(index, in SpiConfig.Default);
         }
         catch
         {
@@ -88,7 +87,7 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
 
         try
         {
-            var ok = TryGetDeviceInfo(index, out var info) && IsValidCh347Device(info) &&
+            var ok = IsCompatibleCh347Device(index) &&
                 NativeMethods.CH347SPI_Init(index, in SpiConfig.Default);
             progress.Report(100);
             return ok;
@@ -532,14 +531,29 @@ public sealed class Ch347NativeProgrammer : IChipProgrammer
         }
     }
 
-    private static bool IsValidCh347Device(Ch347DeviceInfo info)
+    private static bool IsCompatibleCh347Device(int index)
+    {
+        return !TryGetDeviceInfo(index, out var info) || IsCompatibleCh347Device(info);
+    }
+
+    private static bool IsCompatibleCh347Device(Ch347DeviceInfo info)
     {
         var deviceId = info.DeviceIdText;
         var hasWchVid = deviceId.Contains("VID_1A86", StringComparison.OrdinalIgnoreCase);
         var supportedPid = SupportedPids.Any(pid => deviceId.Contains($"PID_{pid}", StringComparison.OrdinalIgnoreCase));
-        var supportedFunction = info.FuncType is 1 or 2 || info.ChipMode is 1 or 2 or 4;
-        var hasDataEndpoint = info.DataUpEndp != 0 && info.DataDnEndp != 0;
-        return hasWchVid && supportedPid && supportedFunction && hasDataEndpoint;
+        var hasAnyPid = deviceId.Contains("PID_", StringComparison.OrdinalIgnoreCase);
+
+        if (hasWchVid && hasAnyPid)
+        {
+            return supportedPid;
+        }
+
+        if (!string.IsNullOrWhiteSpace(deviceId) && hasAnyPid)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private sealed class Ch347Device : IDisposable
