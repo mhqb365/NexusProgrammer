@@ -51,6 +51,12 @@ if errorlevel 8 (
     exit /b 1
 )
 
+copy /Y "%ROOT%README.md" "%OUTPUT_DIR%\README.md" >nul
+if errorlevel 1 (
+    echo Cannot copy README.md.
+    exit /b 1
+)
+
 echo.
 echo Build completed: %OUTPUT_DIR%
 endlocal
