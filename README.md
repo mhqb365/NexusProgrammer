@@ -89,7 +89,7 @@ See `THIRD_PARTY_NOTICES.md` and `flashrom-data/COPYING.rst` for more informatio
 
 ## Discussion
 
-Create a Discussion on GitHub to discuss features, report bugs and propose improvements. Or discuss on Telegram at [https://t.me/+O-3wSYgW95lkNThl](mhqb365's space).
+Create a Discussion on GitHub to discuss features, report bugs and propose improvements. Or discuss on Telegram at https://t.me/+O-3wSYgW95lkNThl
 
 ## Tiếng Việt
 
@@ -178,4 +178,4 @@ Xem `THIRD_PARTY_NOTICES.md` và `flashrom-data/COPYING.rst` để biết thêm 
 
 ## Thảo luận
 
-Tạo Discussion trên GitHub để thảo luận về các tính năng, báo lỗi và đề xuất cải tiến. Hoặc thảo luận trên Telegram tại [https://t.me/+O-3wSYgW95lkNThl](mhqb365's space).
+Tạo Discussion trên GitHub để thảo luận về các tính năng, báo lỗi và đề xuất cải tiến. Hoặc thảo luận trên Telegram tại https://t.me/+O-3wSYgW95lkNThl
