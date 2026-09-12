@@ -73,6 +73,10 @@ Parts of the CH341/CH347 SPI NOR chip catalog are generated from flashrom chip d
 
 See `THIRD_PARTY_NOTICES.md` and `flashrom-data/COPYING.rst` for more information
 
+## Discussion
+
+Create a Discussion on GitHub to discuss features, report bugs and propose improvements. Or discuss on Telegram at [https://t.me/+O-3wSYgW95lkNThl](mhqb365's space)
+
 ## Tiếng Việt
 
 [English](#english) | Tiếng Việt
@@ -143,3 +147,7 @@ MIT License
 Một số phần trong danh sách IC SPI NOR của CH341/CH347 được tạo từ định nghĩa chip của flashrom và vẫn tuân theo giấy phép flashrom GPL-2.0-or-later
 
 Xem `THIRD_PARTY_NOTICES.md` và `flashrom-data/COPYING.rst` để biết thêm thông tin
+
+## Thảo luận
+
+Tạo Discussion trên GitHub để thảo luận về các tính năng, báo lỗi và đề xuất cải tiến. Hoặc thảo luận trên Telegram tại [https://t.me/+O-3wSYgW95lkNThl](mhqb365's space)

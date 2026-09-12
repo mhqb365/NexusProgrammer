@@ -13,7 +13,7 @@ internal static class HexMarkerStore
     [
         new()
         {
-            Name = "Find Win Key",
+            Name = "Windows OEM key",
             Hex = "01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 1D 00 00 00"
         }
     ];

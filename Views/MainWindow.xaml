@@ -615,10 +615,10 @@
                         Style="{StaticResource HexHeaderButtonStyle}"
                         ToolTip="BIOS tools" Click="WindowsKeyMenuButton_Click">Tools<Button.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Merge" Click="MergeBios_Click" />
-                                <MenuItem Header="Split" Click="SplitBios_Click" />
-                                <MenuItem Header="Compare" Click="HexCompare_Click" />
-                                <MenuItem Header="Find Win Key" Click="WindowsKeySearch_Click" />
+                                <MenuItem Header="Merge buffer" Click="MergeBios_Click" />
+                                <MenuItem Header="Split buffer" Click="SplitBios_Click" />
+                                <MenuItem Header="Compare buffer" Click="HexCompare_Click" />
+                                <MenuItem Header="Find OEM key" Click="WindowsKeySearch_Click" />
                                 <Separator />
                                 <MenuItem Header="Unlock ACER" Click="UnlockAcer_Click" />
                                 <MenuItem Header="Unlock ASUS" Click="UnlockAsus_Click" />
@@ -638,6 +638,8 @@
                                     Click="PasteHexClipboard_Click" />
                                 <MenuItem Header="Replace" InputGestureText="Ctrl+R"
                                     Click="ReplaceSelection_Click" />
+                                <Separator />
+                                <MenuItem Header="Select block" Click="SelectBlock_Click" />
                                 <MenuItem Header="Fill selection" Click="FillSelection_Click" />
                             </ContextMenu>
                         </Button.ContextMenu>
@@ -652,11 +654,11 @@
                                 <MenuItem Header="Go to" InputGestureText="Ctrl+G"
                                     Click="GoToOffset_Click" />
                                 <Separator />
-                                <MenuItem x:Name="HexMarkerMenuItem" Header="HEX Marker">
+                                <MenuItem x:Name="HexMarkerMenuItem" Header="Hex marker">
                                     <MenuItem Header="Manage" Click="HexMarkerManage_Click" />
                                     <Separator />
                                 </MenuItem>
-                                <MenuItem x:Name="AsciiMarkerMenuItem" Header="ASCII Marker">
+                                <MenuItem x:Name="AsciiMarkerMenuItem" Header="Text marker">
                                     <MenuItem Header="Manage" Click="AsciiMarkerManage_Click" />
                                     <Separator />
                                 </MenuItem>

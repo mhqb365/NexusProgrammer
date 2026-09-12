@@ -1,7 +1,7 @@
 <Window x:Class="NexusProgrammer.HexMarkerWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Hex Marker" Width="560" Height="360" MinWidth="460" MinHeight="300"
+    Title="Hex marker" Width="560" Height="360" MinWidth="460" MinHeight="300"
     WindowStartupLocation="CenterOwner"
     ResizeMode="CanResize"
     Background="{DynamicResource AppBackgroundBrush}"
@@ -79,7 +79,8 @@
         <TextBox x:Name="NameBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
             Height="24" Margin="0,0,0,6" />
 
-        <TextBlock x:Name="ValueLabel" Grid.Row="2" Grid.Column="0" Text="Hex" VerticalAlignment="Center" />
+        <TextBlock x:Name="ValueLabel" Grid.Row="2" Grid.Column="0" Text="Hex"
+            VerticalAlignment="Center" />
         <TextBox x:Name="HexBox" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
             Height="24" Margin="0,0,0,6" TextChanged="HexBox_TextChanged" />
 

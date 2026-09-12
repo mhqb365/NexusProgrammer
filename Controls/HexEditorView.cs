@@ -42,6 +42,7 @@ public sealed class HexEditorView : FrameworkElement
     private readonly MenuItem _pasteItem;
     private readonly MenuItem _replaceItem;
     private readonly MenuItem _fillSelectionItem;
+    private readonly MenuItem _selectBlockItem;
     private ReplaceRequestEventArgs? _contextReplaceRequest;
 
     public HexEditorView()
@@ -70,9 +71,11 @@ public sealed class HexEditorView : FrameworkElement
                 FillSelectionRequested?.Invoke(this, EventArgs.Empty);
             }
         };
+        _selectBlockItem = new MenuItem { Header = "Select block" };
+        _selectBlockItem.Click += (_, _) => SelectBlockRequested?.Invoke(this, EventArgs.Empty);
         var clearBufferItem = new MenuItem { Header = "Clear buffer" };
         clearBufferItem.Click += (_, _) => ClearBufferRequested?.Invoke(this, EventArgs.Empty);
-        ContextMenu = new ContextMenu { Items = { _copyItem, _pasteItem, _replaceItem, _fillSelectionItem, new Separator(), clearBufferItem } };
+        ContextMenu = new ContextMenu { Items = { _copyItem, _pasteItem, _replaceItem, new Separator(), _selectBlockItem, _fillSelectionItem, new Separator(), clearBufferItem } };
         ContextMenu.Opened += (_, _) =>
         {
             _contextReplaceRequest ??= CreateReplaceRequest();
@@ -118,6 +121,8 @@ public sealed class HexEditorView : FrameworkElement
     public event EventHandler? FillSelectionRequested;
 
     public event EventHandler<ReplaceRequestEventArgs>? ReplaceSelectionRequested;
+
+    public event EventHandler? SelectBlockRequested;
 
     public ReplaceRequestEventArgs? CreateReplaceRequest()
     {

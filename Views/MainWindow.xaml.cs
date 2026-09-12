@@ -474,6 +474,7 @@ public partial class MainWindow : Window
         editor.ClearBufferRequested += HexEditor_ClearBufferRequested;
         editor.FillSelectionRequested += HexEditor_FillSelectionRequested;
         editor.ReplaceSelectionRequested += HexEditor_ReplaceSelectionRequested;
+        editor.SelectBlockRequested += HexEditor_SelectBlockRequested;
         editor.SelectionChanged += HexEditor_SelectionChanged;
     }
 
@@ -1373,6 +1374,50 @@ public partial class MainWindow : Window
         }
     }
 
+    private void SelectBlock_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeMemoryTab is not null)
+        {
+            ShowSelectBlockDialog(_activeMemoryTab);
+        }
+    }
+
+    private void HexEditor_SelectBlockRequested(object? sender, EventArgs e)
+    {
+        if (sender is not HexEditorView editor)
+        {
+            return;
+        }
+
+        var state = _memoryTabs.Values.FirstOrDefault(item => ReferenceEquals(item.Editor, editor));
+        if (state is not null)
+        {
+            ShowSelectBlockDialog(state);
+        }
+    }
+
+    private void ShowSelectBlockDialog(MemoryTabState state)
+    {
+        if (state.Buffer.Length == 0)
+        {
+            return;
+        }
+
+        var editor = state.Editor;
+        var dialog = new SelectBlockWindow(state.Buffer.Length, editor.SelectedOffset, editor.SelectionLength)
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        MemoryTabControl.SelectedItem = state.Tab;
+        editor.SelectRange(dialog.StartOffset, dialog.BlockLength);
+        UpdateStatus();
+    }
+
     private void HexMarkerManage_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new HexMarkerWindow(_hexMarkers)
@@ -1388,7 +1433,7 @@ public partial class MainWindow : Window
 
     private void AsciiMarkerManage_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new HexMarkerWindow(_asciiMarkers, "ASCII Marker", "ASCII", formatHex: false)
+        var dialog = new HexMarkerWindow(_asciiMarkers, "Text Marker", "Text", formatHex: false)
         {
             Owner = this
         };

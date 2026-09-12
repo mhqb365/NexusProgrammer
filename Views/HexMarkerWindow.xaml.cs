@@ -9,7 +9,7 @@ public partial class HexMarkerWindow : Window
     private readonly bool _formatHex;
     private bool _formattingHexText;
 
-    public HexMarkerWindow(IEnumerable<HexMarker> markers, string title = "Hex Marker", string valueLabel = "Hex", bool formatHex = true)
+    public HexMarkerWindow(IEnumerable<HexMarker> markers, string title = "Hex marker", string valueLabel = "Hex", bool formatHex = true)
     {
         InitializeComponent();
         Title = title;
@@ -55,7 +55,7 @@ public partial class HexMarkerWindow : Window
     {
         if (MarkerList.SelectedItem is not HexMarker selected)
         {
-            MessageBox.Show("Select a marker to update.", "Hex Marker", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Select a marker to update.", "Hex marker", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -114,20 +114,20 @@ public partial class HexMarkerWindow : Window
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            MessageBox.Show("Marker name is required.", "Hex Marker", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Marker name is required.", "", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
         byte[] pattern = [];
         if (_formatHex && !HexSearchService.TryParseHexPattern(hex, out pattern))
         {
-            MessageBox.Show("Invalid hex marker.", "Hex Marker", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Invalid .", "", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
         if (!_formatHex && string.IsNullOrEmpty(hex))
         {
-            MessageBox.Show("ASCII marker is required.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Text marker is required.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
