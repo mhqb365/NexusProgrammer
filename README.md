@@ -81,7 +81,7 @@ You can download the latest release from the [Releases page](https://github.com/
 
 ### Discussion
 
-Create a Discussion on GitHub to discuss features, report bugs and propose improvements. Or discuss on Telegram at https://t.me/+O-3wSYgW95lkNThl
+Create a Discussion on GitHub to discuss features, report bugs and propose improvements. Or discuss on Telegram at https://t.me/mhqb365space
 
 ### License
 
@@ -170,7 +170,7 @@ Bạn có thể tải bản phát hành mới nhất tại [trang Releases](http
 
 ### Thảo luận
 
-Tạo Discussion trên GitHub để thảo luận về các tính năng, báo lỗi và đề xuất cải tiến. Hoặc thảo luận trên Telegram tại https://t.me/+O-3wSYgW95lkNThl
+Tạo Discussion trên GitHub để thảo luận về các tính năng, báo lỗi và đề xuất cải tiến. Hoặc thảo luận trên Telegram tại https://t.me/mhqb365space
 
 ### Giấy phép
 
