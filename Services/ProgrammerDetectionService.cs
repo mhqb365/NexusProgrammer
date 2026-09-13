@@ -4,6 +4,7 @@ namespace NexusProgrammer;
 
 public sealed record ProgrammerDetection(
     bool T48Detected,
+    bool Tl866iiPlusDetected,
     bool Rt809fDetected,
     bool Rt809hDetected,
     bool Ch347Detected,
@@ -12,6 +13,7 @@ public sealed record ProgrammerDetection(
     public bool IsConnected(string key) => key switch
     {
         "t48" => T48Detected,
+        "tl866iiplus" => Tl866iiPlusDetected,
         "rt809f" => Rt809fDetected,
         "rt809h" => Rt809hDetected,
         "ch347" => Ch347Detected,
@@ -27,6 +29,7 @@ internal static class ProgrammerDetectionService
         var (ch347Detected, ch341Detected) = DetectWchProgrammers();
         return new ProgrammerDetection(
             T48SDKProgrammer.CanOpenDevice(),
+            TL866IIPlusSDKProgrammer.CanOpenDevice(),
             RT809FSDKProgrammer.CanOpenDevice(),
             RT809HSDKProgrammer.CanOpenDevice(),
             ch347Detected,

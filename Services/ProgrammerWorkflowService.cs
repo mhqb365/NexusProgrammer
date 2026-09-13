@@ -10,6 +10,7 @@ public sealed record ProgrammerSelection(string Key, string StatusText, bool IsC
         "ch347" => new Ch347NativeProgrammer(),
         "rt809f" => new RT809FSDKProgrammer(),
         "rt809h" => new RT809HSDKProgrammer(),
+        "tl866iiplus" => new TL866IIPlusSDKProgrammer(),
         "t48" => new T48SDKProgrammer(),
         _ => new MockProgrammer()
     };
@@ -44,6 +45,11 @@ public static class ProgrammerWorkflowService
                 return Connected("rt809h");
             }
 
+            if (detection.Tl866iiPlusDetected)
+            {
+                return Connected("tl866iiplus");
+            }
+
             if (detection.T48Detected)
             {
                 return Connected("t48");
@@ -63,6 +69,7 @@ public static class ProgrammerWorkflowService
         "ch347" => "CH347",
         "rt809f" => "RT809F",
         "rt809h" => "RT809H",
+        "tl866iiplus" => "TL866II Plus",
         "t48" => "XGecu T48",
         _ => "Programmer"
     };

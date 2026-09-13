@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>TL866IIPlus.SDK</AssemblyName>
+    <RootNamespace>TL866IIPlusSdk</RootNamespace>
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Title>TL866IIPlus SDK</Title>
+    <Product>TL866IIPlus SDK</Product>
+    <Description>Clean-room WinUSB SDK foundation for XGecu TL866IIPlus programmers.</Description>
+    <Authors>mhqb365</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+</Project>

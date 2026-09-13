@@ -10,6 +10,7 @@ public class ProgrammerWorkflowServiceTests
     {
         var detection = new ProgrammerDetection(
             T48Detected: true,
+            Tl866iiPlusDetected: true,
             Rt809fDetected: true,
             Rt809hDetected: true,
             Ch347Detected: true,
@@ -27,6 +28,7 @@ public class ProgrammerWorkflowServiceTests
     {
         var detection = new ProgrammerDetection(
             T48Detected: false,
+            Tl866iiPlusDetected: false,
             Rt809fDetected: false,
             Rt809hDetected: true,
             Ch347Detected: false,
@@ -44,6 +46,7 @@ public class ProgrammerWorkflowServiceTests
     {
         var detection = new ProgrammerDetection(
             T48Detected: false,
+            Tl866iiPlusDetected: false,
             Rt809fDetected: false,
             Rt809hDetected: false,
             Ch347Detected: false,

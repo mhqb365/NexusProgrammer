@@ -79,6 +79,7 @@ public partial class MainWindow : Window
         new("ch347", "CH347"),
         new("rt809f", "RT809F"),
         new("rt809h", "RT809H"),
+        new("tl866iiplus", "TL866II Plus"),
         new("t48", "T48")
     ];
     private List<IcCandidate> _icCatalog = [];
