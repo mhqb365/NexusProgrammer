@@ -23,4 +23,5 @@ internal sealed class MemoryTabState
     public byte[] Buffer { get; set; }
     public MeaAnalysisResult? MeaAnalysis { get; set; }
     public string SourceFileName { get; set; } = string.Empty;
+    public bool CloseButtonVisible { get; set; }
 }

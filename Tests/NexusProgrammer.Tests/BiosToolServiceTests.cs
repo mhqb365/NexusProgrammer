@@ -32,11 +32,11 @@ public class BiosToolServiceTests
     }
 
     [Fact]
-    public void ClearMeFileNameUsesCurrentChipWhenSourceIsEmpty()
+    public void ClearMeFileNameUsesMemoryLabelWhenSourceIsEmpty()
     {
         var memory = new MemoryBufferOption("Memory 1", [], string.Empty);
 
-        Assert.Equal("ACE25C512_CLEARME.bin", BiosToolService.ClearMeFileNameFor(memory, "ACE25C512"));
+        Assert.Equal("Memory 1_CLEARME.bin", BiosToolService.ClearMeFileNameFor(memory, "ACE25C512"));
     }
 
     [Fact]

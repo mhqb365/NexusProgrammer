@@ -242,7 +242,7 @@ public partial class MainWindow : Window
         SetActiveBuffer(buffer);
         if (_activeMemoryTab is not null)
         {
-            _activeMemoryTab.SourceFileName = sourceFileName;
+            SetMemoryTabSourceName(_activeMemoryTab, sourceFileName);
         }
 
         RebuildRows();
@@ -275,7 +275,9 @@ public partial class MainWindow : Window
             Tag = "Title"
         });
 
-        if (!canClose)
+        var showClose = canClose || state.Tab == Bios1Tab && !IsBufferAllFF(state.Buffer);
+        state.CloseButtonVisible = showClose;
+        if (!showClose)
         {
             return header;
         }
@@ -288,7 +290,7 @@ public partial class MainWindow : Window
             Text = "x",
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = $"Close {state.DisplayName}",
+            ToolTip = state.Tab == Bios1Tab ? $"Clear {state.DisplayName}" : $"Close {state.DisplayName}",
             Tag = state.Tab
         };
         closeButton.PreviewMouseLeftButtonDown += CloseMemoryTab_MouseDown;
@@ -309,8 +311,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        state.DisplayName = newName.Trim();
-        tab.Header = CreateMemoryTabHeader(state, canClose: tab != Bios1Tab);
+        SetMemoryTabDisplayName(state, newName.Trim());
         AppendLog($"Renamed tab to {state.DisplayName}");
     }
 
@@ -377,8 +378,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (tab is null || tab == Bios1Tab)
+        if (tab is null)
         {
+            return;
+        }
+
+        if (tab == Bios1Tab)
+        {
+            if (_memoryTabs.TryGetValue(tab, out var state))
+            {
+                ClearMemoryTabBuffer(state, resetName: true);
+            }
+
             return;
         }
 
@@ -430,6 +441,43 @@ public partial class MainWindow : Window
 
     private static string MemoryTabDisplayName(MemoryTabState state) =>
         string.IsNullOrWhiteSpace(state.DisplayName) ? MemoryTabLabel(state.Index) : state.DisplayName;
+
+    private static bool IsBufferAllFF(byte[] buffer) => buffer.All(value => value == 0xFF);
+
+    private static string MemoryTabNameFromSource(string sourceName)
+    {
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
+            return string.Empty;
+        }
+
+        var fileName = Path.GetFileName(sourceName);
+        var name = Path.GetFileNameWithoutExtension(fileName);
+        return string.IsNullOrWhiteSpace(name) ? fileName : name;
+    }
+
+    private void SetMemoryTabDisplayName(MemoryTabState state, string displayName)
+    {
+        state.DisplayName = string.IsNullOrWhiteSpace(displayName)
+            ? MemoryTabLabel(state.Index)
+            : displayName.Trim();
+        state.Tab.Header = CreateMemoryTabHeader(state, canClose: state.Tab != Bios1Tab);
+    }
+
+    private void RefreshMemoryTabHeader(MemoryTabState state)
+    {
+        state.Tab.Header = CreateMemoryTabHeader(state, canClose: state.Tab != Bios1Tab);
+    }
+
+    private void SetMemoryTabSourceName(MemoryTabState state, string sourceName)
+    {
+        state.SourceFileName = sourceName;
+        var displayName = MemoryTabNameFromSource(sourceName);
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            SetMemoryTabDisplayName(state, displayName);
+        }
+    }
 
     private MemoryTabState CreateMemoryTabState(int index, TabItem tab)
     {
@@ -545,6 +593,7 @@ public partial class MainWindow : Window
         {
             _activeMemoryTab.Buffer = buffer;
             _activeMemoryTab.MeaAnalysis = null;
+            RefreshMemoryTabHeader(_activeMemoryTab);
         }
     }
 
@@ -579,6 +628,7 @@ public partial class MainWindow : Window
             if (_activeMemoryTab is not null)
             {
                 _activeMemoryTab.MeaAnalysis = null;
+                RefreshFirstTabHeaderAfterByteChange(_activeMemoryTab, value);
             }
 
             var rowIndex = (offset - _previewStartOffset) / BytesPerHexRow;
@@ -1068,7 +1118,7 @@ public partial class MainWindow : Window
             SetActiveBuffer(result.Bios);
             if (_activeMemoryTab is not null)
             {
-                _activeMemoryTab.SourceFileName = ClearMeFileNameFor(memory);
+                SetMemoryTabSourceName(_activeMemoryTab, ClearMeFileNameFor(memory));
             }
 
             RebuildRows();
@@ -1275,7 +1325,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var fileName = UniqueMemoryTabFileName(BiosToolService.Unlock8Fc8FileNameFor(_activeMemoryTab.SourceFileName));
+        var fileName = UniqueMemoryTabFileName(BiosToolService.Unlock8Fc8FileNameFor(MemoryTabSourceNameOrLabel(_activeMemoryTab)));
         var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
         MemoryTabControl.SelectedItem = tab;
         AppendLog($"Unlock DELL completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.PatchCount} patch(es), {FormatBytes(result.Bios.Length)})");
@@ -1321,7 +1371,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var fileName = UniqueMemoryTabFileName(BiosToolService.OemUnlockFileNameFor(_activeMemoryTab.SourceFileName, kind));
+        var fileName = UniqueMemoryTabFileName(BiosToolService.OemUnlockFileNameFor(MemoryTabSourceNameOrLabel(_activeMemoryTab), kind));
         var tab = AddMemoryTabWithBuffer(result.Bios, fileName);
         MemoryTabControl.SelectedItem = tab;
         AppendLog($"{title} completed: {sourceLabel} -> {MemoryTabDisplayName(_memoryTabs[tab])} ({result.ClearedRanges.Count} region(s), {FormatBytes(result.Bios.Length)})");
@@ -2359,7 +2409,7 @@ public partial class MainWindow : Window
         SetActiveBuffer(trimResult.Buffer);
         if (_activeMemoryTab is not null)
         {
-            _activeMemoryTab.SourceFileName = fileName;
+            SetMemoryTabSourceName(_activeMemoryTab, fileName);
         }
 
         _currentOffset = 0;
@@ -2398,7 +2448,7 @@ public partial class MainWindow : Window
         await LargeFileIo.WriteAllBytesAsync(dialog.FileName, _buffer);
         if (_activeMemoryTab is not null)
         {
-            _activeMemoryTab.SourceFileName = dialog.FileName;
+            SetMemoryTabSourceName(_activeMemoryTab, dialog.FileName);
         }
 
         AppendLog($"Saved {dialog.FileName} ({FormatBytes(_buffer.Length)})");
@@ -2424,7 +2474,30 @@ public partial class MainWindow : Window
     {
         if (_activeMemoryTab is not null)
         {
-            _activeMemoryTab.SourceFileName = fileName;
+            SetMemoryTabSourceName(_activeMemoryTab, fileName);
+        }
+    }
+
+    private void RefreshFirstTabHeaderAfterByteChange(MemoryTabState state, byte changedValue)
+    {
+        if (state.Tab != Bios1Tab)
+        {
+            return;
+        }
+
+        if (changedValue != 0xFF)
+        {
+            if (!state.CloseButtonVisible)
+            {
+                RefreshMemoryTabHeader(state);
+            }
+
+            return;
+        }
+
+        if (state.CloseButtonVisible && IsBufferAllFF(state.Buffer))
+        {
+            RefreshMemoryTabHeader(state);
         }
     }
 
@@ -2454,6 +2527,11 @@ public partial class MainWindow : Window
     {
         return BiosToolService.ClearMeFileNameFor(memory, CurrentChip().Name);
     }
+
+    private static string MemoryTabSourceNameOrLabel(MemoryTabState state) =>
+        string.IsNullOrWhiteSpace(state.SourceFileName)
+            ? $"{MemoryTabDisplayName(state)}.bin"
+            : state.SourceFileName;
 
     private async void SaveLog_Click(object sender, RoutedEventArgs e)
     {
@@ -2485,6 +2563,12 @@ public partial class MainWindow : Window
     private void FillFF_Click(object sender, RoutedEventArgs e)
     {
         Array.Fill(_buffer, (byte)0xFF);
+        if (_activeMemoryTab is not null)
+        {
+            _activeMemoryTab.MeaAnalysis = null;
+            RefreshMemoryTabHeader(_activeMemoryTab);
+        }
+
         RebuildRows();
         AppendLog("Buffer filled with FF");
     }
@@ -2503,9 +2587,22 @@ public partial class MainWindow : Window
         }
 
         MemoryTabControl.SelectedItem = state.Tab;
+        ClearMemoryTabBuffer(state);
+    }
+
+    private void ClearMemoryTabBuffer(MemoryTabState state, bool resetName = false)
+    {
+        MemoryTabControl.SelectedItem = state.Tab;
         Array.Fill(state.Buffer, (byte)0xFF);
         state.MeaAnalysis = null;
-        editor.SetBuffer(state.Buffer, OnHexCellChanged);
+        if (resetName)
+        {
+            state.SourceFileName = string.Empty;
+            state.DisplayName = MemoryTabLabel(state.Index);
+        }
+
+        RefreshMemoryTabHeader(state);
+        state.Editor.SetBuffer(state.Buffer, OnHexCellChanged);
         RebuildRows();
         UpdateStatus();
         AppendLog($"{MemoryTabDisplayName(state)} buffer cleared to FF");
@@ -3106,6 +3203,11 @@ public partial class MainWindow : Window
             PageCombo.SelectedItem = knownChip.PageSize.ToString();
             CommandCombo.SelectedItem = knownChip.CommandSet;
             ResizeBuffer(knownChip.SizeBytes, fill: 0xFF);
+            if (IsLoaded)
+            {
+                SetActiveMemorySourceName(ChipDumpFileName(knownChip));
+            }
+
             UpdateDeviceInfo(knownChip);
         }
         finally

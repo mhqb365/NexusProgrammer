@@ -29,9 +29,11 @@ public static class BiosToolService
 
     public static string ClearMeFileNameFor(MemoryBufferOption memory, string fallbackChipName)
     {
-        var source = string.IsNullOrWhiteSpace(memory.SourceFileName)
-            ? fallbackChipName
-            : Path.GetFileNameWithoutExtension(memory.SourceFileName);
+        var source = !string.IsNullOrWhiteSpace(memory.SourceFileName)
+            ? Path.GetFileNameWithoutExtension(memory.SourceFileName)
+            : !string.IsNullOrWhiteSpace(memory.Label)
+                ? memory.Label
+                : fallbackChipName;
         return $"{SafeFileStem(source)}_CLEARME.bin";
     }
 
