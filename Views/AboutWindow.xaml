@@ -50,7 +50,8 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right"
             VerticalAlignment="Top" Margin="0,14,0,0">
             <Button Width="110" Height="28" Margin="0,0,8,0" Click="SourceCode_Click">Source Code</Button>
-            <Button Width="86" Height="28" Click="Author_Click">Author</Button>
+            <Button Width="86" Height="28" Margin="0,0,8,0" Click="Author_Click">Author</Button>
+            <Button Width="132" Height="28" Click="BuyAuthorCoffee_Click">Buy Author A Coffee</Button>
         </StackPanel>
     </Grid>
 </Window>

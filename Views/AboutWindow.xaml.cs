@@ -7,6 +7,7 @@ public partial class AboutWindow : Window
 {
     private const string SourceCodeUrl = "https://github.com/mhqb365/NexusProgrammer";
     private const string AuthorUrl = "https://mhqb365.com";
+    private const string BuyAuthorCoffeeUrl = "https://mhqb365.com/buymeacoffee.html";
 
     public AboutWindow()
     {
@@ -17,6 +18,8 @@ public partial class AboutWindow : Window
     private void SourceCode_Click(object sender, RoutedEventArgs e) => OpenUrl(SourceCodeUrl);
 
     private void Author_Click(object sender, RoutedEventArgs e) => OpenUrl(AuthorUrl);
+
+    private void BuyAuthorCoffee_Click(object sender, RoutedEventArgs e) => OpenUrl(BuyAuthorCoffeeUrl);
 
     private static void OpenUrl(string url)
     {
